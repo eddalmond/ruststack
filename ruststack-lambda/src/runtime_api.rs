@@ -21,9 +21,9 @@ use crate::invocation::{Invocation, InvocationResult};
 /// State for the Runtime API server
 pub struct RuntimeApiState {
     /// Channel to receive invocations
-    pub invocation_rx: RwLock<mpsc::Receiver<Invocation>>,
+    invocation_rx: RwLock<mpsc::Receiver<Invocation>>,
     /// Currently active invocation
-    pub current_invocation: RwLock<Option<ActiveInvocation>>,
+    current_invocation: RwLock<Option<ActiveInvocation>>,
 }
 
 struct ActiveInvocation {

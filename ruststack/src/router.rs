@@ -4,6 +4,7 @@ use axum::{
     body::Body,
     extract::{Path, Query, State},
     http::{header, HeaderMap, Method, StatusCode},
+    middleware::{self, Next},
     response::Response,
     routing::{any, delete, get, post, put},
     Json, Router,
@@ -13,9 +14,10 @@ use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
+use ruststack_dynamodb::{handlers as dynamodb_handlers, DynamoDBState, DynamoDBStorage};
 use ruststack_lambda::{
     handlers::{
-        self as lambda_handlers, CreateFunctionRequest, InvokeQuery, ListFunctionsQuery,
+        self as lambda_handlers, CreateFunctionRequest, ListFunctionsQuery,
         UpdateFunctionCodeRequest, UpdateFunctionConfigRequest,
     },
     LambdaState,
@@ -25,10 +27,14 @@ use ruststack_s3::{
     storage::{EphemeralStorage, ObjectStorage},
 };
 
+use crate::cloudwatch::{self, CloudWatchLogsState};
+
 /// Service state for the main router
 pub struct AppState {
     s3: Arc<S3State>,
+    dynamodb: Arc<DynamoDBState>,
     lambda: Arc<LambdaState>,
+    cloudwatch_logs: Arc<CloudWatchLogsState>,
     s3_enabled: bool,
     dynamodb_enabled: bool,
     lambda_enabled: bool,
@@ -37,14 +43,33 @@ pub struct AppState {
 impl AppState {
     pub fn new(s3_enabled: bool, dynamodb_enabled: bool, lambda_enabled: bool) -> Self {
         let storage: Arc<dyn ObjectStorage> = Arc::new(EphemeralStorage::new());
+        let cloudwatch_logs = Arc::new(CloudWatchLogsState::new());
         Self {
             s3: Arc::new(S3State { storage }),
+            dynamodb: Arc::new(DynamoDBState {
+                storage: Arc::new(DynamoDBStorage::new()),
+            }),
             lambda: Arc::new(LambdaState::new()),
+            cloudwatch_logs,
             s3_enabled,
             dynamodb_enabled,
             lambda_enabled,
         }
     }
+}
+
+/// Middleware to add x-amzn-requestid header to all responses
+async fn add_request_id(
+    request: axum::http::Request<Body>,
+    next: Next,
+) -> Response {
+    let mut response = next.run(request).await;
+    let request_id = uuid::Uuid::new_v4().to_string();
+    response.headers_mut().insert(
+        "x-amzn-requestid",
+        request_id.parse().unwrap(),
+    );
+    response
 }
 
 /// Create the main application router
@@ -94,7 +119,8 @@ pub fn create_router(state: AppState) -> Router {
         // S3 routes (catch-all)
         .route("/", any(handle_root))
         .route("/{bucket}", any(handle_bucket))
-        .route("/{bucket}/{*key}", any(handle_object))
+        .route("/{bucket}/*key", any(handle_object))
+        .layer(middleware::from_fn(add_request_id))
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state)
 }
@@ -104,7 +130,7 @@ async fn health_check() -> Response {
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(
-            r#"{"status": "running", "services": ["s3", "dynamodb", "lambda"]}"#,
+            r#"{"status": "running", "services": {"s3": "available", "dynamodb": "available", "lambda": "available", "logs": "available"}}"#,
         ))
         .unwrap()
 }
@@ -203,18 +229,36 @@ async fn invoke_function(
         .await
 }
 
-// === S3 handlers ===
+// === S3 / DynamoDB / CloudWatch Logs routing ===
 
 async fn handle_root(
     State(state): State<Arc<AppState>>,
     method: Method,
     headers: HeaderMap,
+    body: Bytes,
 ) -> Response {
     // Check for DynamoDB request
     if let Some(target) = headers.get("x-amz-target") {
         if let Ok(target_str) = target.to_str() {
             if target_str.starts_with("DynamoDB") {
-                return handle_dynamodb_stub().await;
+                if !state.dynamodb_enabled {
+                    return service_disabled("dynamodb");
+                }
+                return dynamodb_handlers::handle_request(
+                    State(state.dynamodb.clone()),
+                    headers,
+                    body,
+                )
+                .await;
+            }
+            // CloudWatch Logs
+            if target_str.starts_with("Logs_") {
+                return cloudwatch::handle_logs_request(
+                    State(state.cloudwatch_logs.clone()),
+                    headers,
+                    body,
+                )
+                .await;
             }
         }
     }
@@ -271,14 +315,6 @@ async fn handle_object(
         body,
     )
     .await
-}
-
-async fn handle_dynamodb_stub() -> Response {
-    Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .header(header::CONTENT_TYPE, "application/x-amz-json-1.0")
-        .body(Body::from(r#"{"__type":"com.amazonaws.dynamodb.v20120810#ServiceUnavailableException","message":"DynamoDB service is not yet implemented"}"#))
-        .unwrap()
 }
 
 fn service_disabled(service: &str) -> Response {

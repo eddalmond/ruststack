@@ -1,217 +1,399 @@
 # RustStack
 
-**High-fidelity AWS local emulator for integration testing**
-
-RustStack provides local implementations of S3, DynamoDB, and Lambda for testing Flask/Lambda applications without cloud costs or network latency.
+A high-fidelity AWS local emulator written in Rust. Drop-in replacement for LocalStack for integration testing Flask/Lambda applications.
 
 ## Features
 
-- **S3**: GetObject, PutObject, DeleteObject, HeadObject, ListObjectsV2
-- **DynamoDB**: GetItem, PutItem, DeleteItem, UpdateItem, Query, Scan (with expressions)
-- **Lambda**: CreateFunction, Invoke, DeleteFunction (with Flask/WSGI support)
-- **Error Fidelity**: Exact AWS error codes and response formats
+- **S3** - Complete bucket and object operations with XML error responses
+- **DynamoDB** - Full table operations with expression support (KeyConditionExpression, FilterExpression, UpdateExpression)
+- **Lambda** - Function management and subprocess-based Python execution
+- **CloudWatch Logs** - Log groups, streams, and events for Lambda execution logs
+- **Single binary** - No Docker, no Java, just one executable
+- **Fast startup** - Ready in milliseconds, not seconds
+- **AWS-compatible** - Proper error codes, request IDs, content types
 
 ## Quick Start
 
-### Prerequisites
-
-- Rust 1.75+
-- Docker (for Lambda)
-- Java 11+ (for DynamoDB Local)
-- DynamoDB Local JAR
-
-### Installation
+### Build
 
 ```bash
-# Clone
-git clone https://github.com/your-org/ruststack
-cd ruststack
-
-# Build
 cargo build --release
-
-# Run
-./target/release/ruststack
 ```
 
-### Docker
+### Run
 
 ```bash
-docker run -p 4566:4566 -v /var/run/docker.sock:/var/run/docker.sock ruststack/ruststack
+# Default port 4566 (LocalStack compatible)
+./target/release/ruststack
+
+# Custom port
+./target/release/ruststack --port 5000
+
+# With data persistence (coming soon)
+./target/release/ruststack --data-dir ./data
+
+# Debug logging
+RUST_LOG=debug ./target/release/ruststack
 ```
 
-### Usage with AWS SDK
+### Options
+
+```
+Usage: ruststack [OPTIONS]
+
+Options:
+  -p, --port <PORT>            Port to listen on [default: 4566]
+      --host <HOST>            Host to bind to [default: 0.0.0.0]
+      --s3                     Enable S3 service [default: true]
+      --dynamodb               Enable DynamoDB service [default: true]
+      --lambda                 Enable Lambda service [default: true]
+      --data-dir <DATA_DIR>    Data directory for persistence
+      --log-level <LOG_LEVEL>  Log level [default: info]
+  -h, --help                   Print help
+```
+
+## Configuring AWS SDKs
+
+### boto3 (Python)
 
 ```python
 import boto3
 
-# S3
-s3 = boto3.client('s3', endpoint_url='http://localhost:4566')
-s3.put_object(Bucket='my-bucket', Key='test.txt', Body=b'hello')
-obj = s3.get_object(Bucket='my-bucket', Key='test.txt')
-print(obj['Body'].read())
+# Create clients pointing at RustStack
+endpoint_url = "http://localhost:4566"
 
-# DynamoDB
-dynamodb = boto3.client('dynamodb', endpoint_url='http://localhost:4566')
-dynamodb.put_item(
-    TableName='my-table',
-    Item={'pk': {'S': 'key1'}, 'data': {'S': 'value1'}}
+s3 = boto3.client(
+    "s3",
+    endpoint_url=endpoint_url,
+    aws_access_key_id="test",
+    aws_secret_access_key="test",
+    region_name="us-east-1",
 )
 
-# Lambda
-lambda_client = boto3.client('lambda', endpoint_url='http://localhost:4566')
-response = lambda_client.invoke(
-    FunctionName='my-function',
-    Payload=b'{"httpMethod": "GET", "path": "/api/test"}'
+dynamodb = boto3.client(
+    "dynamodb",
+    endpoint_url=endpoint_url,
+    aws_access_key_id="test",
+    aws_secret_access_key="test",
+    region_name="us-east-1",
+)
+
+lambda_client = boto3.client(
+    "lambda",
+    endpoint_url=endpoint_url,
+    aws_access_key_id="test",
+    aws_secret_access_key="test",
+    region_name="us-east-1",
+)
+
+logs = boto3.client(
+    "logs",
+    endpoint_url=endpoint_url,
+    aws_access_key_id="test",
+    aws_secret_access_key="test",
+    region_name="us-east-1",
 )
 ```
 
-## Configuration
+### AWS CLI
 
-Environment variables:
+```bash
+# Using endpoint URL
+aws --endpoint-url http://localhost:4566 s3 ls
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RUSTSTACK_PORT` | 4566 | Port to listen on |
-| `RUSTSTACK_S3` | true | Enable S3 service |
-| `RUSTSTACK_DYNAMODB` | true | Enable DynamoDB service |
-| `RUSTSTACK_LAMBDA` | true | Enable Lambda service |
-| `RUSTSTACK_DYNAMODB_LOCAL_PATH` | ./DynamoDBLocal.jar | Path to DynamoDB Local JAR |
+# Or set environment variable
+export AWS_ENDPOINT_URL=http://localhost:4566
+aws s3 ls
+```
+
+### Rust (aws-sdk)
+
+```rust
+use aws_config::BehaviorVersion;
+use aws_sdk_s3::config::Region;
+
+let config = aws_config::defaults(BehaviorVersion::latest())
+    .region(Region::new("us-east-1"))
+    .endpoint_url("http://localhost:4566")
+    .credentials_provider(
+        aws_credential_types::Credentials::new(
+            "test", "test", None, None, "test"
+        )
+    )
+    .load()
+    .await;
+
+let s3_client = aws_sdk_s3::Client::new(&config);
+```
+
+## pytest Fixture (LocalStack Replacement)
+
+Replace your LocalStack fixture with RustStack:
+
+```python
+import subprocess
+import time
+import pytest
+import requests
+
+@pytest.fixture(scope="session")
+def ruststack():
+    """Start RustStack for the test session."""
+    proc = subprocess.Popen(
+        ["./target/release/ruststack", "--port", "4566"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    
+    # Wait for server to be ready
+    for _ in range(30):
+        try:
+            resp = requests.get("http://localhost:4566/health")
+            if resp.status_code == 200:
+                break
+        except requests.ConnectionError:
+            pass
+        time.sleep(0.1)
+    else:
+        proc.kill()
+        raise RuntimeError("RustStack failed to start")
+    
+    yield "http://localhost:4566"
+    
+    proc.terminate()
+    proc.wait()
+
+
+@pytest.fixture
+def s3_client(ruststack):
+    """S3 client pointing at RustStack."""
+    import boto3
+    return boto3.client(
+        "s3",
+        endpoint_url=ruststack,
+        aws_access_key_id="test",
+        aws_secret_access_key="test",
+        region_name="us-east-1",
+    )
+
+
+@pytest.fixture
+def dynamodb_client(ruststack):
+    """DynamoDB client pointing at RustStack."""
+    import boto3
+    return boto3.client(
+        "dynamodb",
+        endpoint_url=ruststack,
+        aws_access_key_id="test",
+        aws_secret_access_key="test",
+        region_name="us-east-1",
+    )
+
+
+@pytest.fixture
+def lambda_client(ruststack):
+    """Lambda client pointing at RustStack."""
+    import boto3
+    return boto3.client(
+        "lambda",
+        endpoint_url=ruststack,
+        aws_access_key_id="test",
+        aws_secret_access_key="test",
+        region_name="us-east-1",
+    )
+```
+
+## API Gateway v2 Event Format
+
+For Lambda invocations, RustStack expects API Gateway v2 (HTTP API) format:
+
+```python
+event = {
+    "version": "2.0",
+    "routeKey": "POST /api/items",
+    "rawPath": "/api/items",
+    "rawQueryString": "",
+    "headers": {
+        "content-type": "application/json",
+    },
+    "requestContext": {
+        "http": {
+            "method": "POST",
+            "path": "/api/items",
+        },
+        "requestId": "test-request-id",
+    },
+    "body": json.dumps({"name": "test"}),
+    "isBase64Encoded": False,
+}
+
+response = lambda_client.invoke(
+    FunctionName="my-function",
+    Payload=json.dumps(event),
+)
+```
+
+## Health Check
+
+```bash
+# RustStack style
+curl http://localhost:4566/health
+
+# LocalStack compatibility
+curl http://localhost:4566/_localstack/health
+```
+
+Response:
+```json
+{
+  "status": "running",
+  "services": {
+    "s3": "available",
+    "dynamodb": "available",
+    "lambda": "available",
+    "logs": "available"
+  }
+}
+```
+
+## Docker
+
+Build a Docker image:
+
+```dockerfile
+FROM rust:1.75-slim AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+COPY --from=builder /app/target/release/ruststack /usr/local/bin/
+EXPOSE 4566
+ENTRYPOINT ["ruststack"]
+```
+
+Build and run:
+
+```bash
+docker build -t ruststack .
+docker run -p 4566:4566 ruststack
+```
+
+### docker-compose
+
+```yaml
+version: '3.8'
+services:
+  ruststack:
+    build: .
+    ports:
+      - "4566:4566"
+    environment:
+      - RUST_LOG=info
+```
 
 ## Supported Operations
 
 ### S3
 
-| Operation | Status | Notes |
-|-----------|--------|-------|
-| GetObject | ✅ | Range requests supported |
-| PutObject | ✅ | Streaming, Content-MD5 |
-| DeleteObject | ✅ | |
-| HeadObject | ✅ | |
-| ListObjectsV2 | ✅ | Pagination, prefix |
-| CreateBucket | ✅ | |
-| DeleteBucket | ✅ | Must be empty |
-| HeadBucket | ✅ | |
+| Operation | Status |
+|-----------|--------|
+| CreateBucket | ✅ |
+| DeleteBucket | ✅ |
+| ListBuckets | ✅ |
+| PutObject | ✅ |
+| GetObject | ✅ |
+| DeleteObject | ✅ |
+| ListObjects | ✅ |
+| ListObjectsV2 | ✅ |
+| HeadObject | ✅ |
+| CopyObject | ✅ |
 
 ### DynamoDB
 
-| Operation | Status | Notes |
-|-----------|--------|-------|
-| GetItem | ✅ | Consistent read |
-| PutItem | ✅ | Condition expressions |
-| DeleteItem | ✅ | Condition expressions |
-| UpdateItem | ✅ | Update expressions |
-| Query | ✅ | Key conditions, GSI |
-| Scan | ✅ | Filter expressions |
-| CreateTable | ✅ | GSI support |
-| DeleteTable | ✅ | |
-| DescribeTable | ✅ | |
+| Operation | Status |
+|-----------|--------|
+| CreateTable | ✅ |
+| DeleteTable | ✅ |
+| DescribeTable | ✅ |
+| ListTables | ✅ |
+| PutItem | ✅ |
+| GetItem | ✅ |
+| DeleteItem | ✅ |
+| UpdateItem | ✅ |
+| Query | ✅ |
+| Scan | ✅ |
+| BatchGetItem | ✅ |
+| BatchWriteItem | ✅ |
+
+Expression support:
+- KeyConditionExpression ✅
+- FilterExpression ✅
+- ProjectionExpression ✅
+- UpdateExpression ✅
+- ConditionExpression ✅
 
 ### Lambda
 
-| Operation | Status | Notes |
-|-----------|--------|-------|
-| CreateFunction | ✅ | Zip upload |
-| Invoke | ✅ | Sync, API Gateway v1 format |
-| DeleteFunction | ✅ | |
-| GetFunction | ✅ | |
+| Operation | Status |
+|-----------|--------|
+| CreateFunction | ✅ |
+| DeleteFunction | ✅ |
+| GetFunction | ✅ |
+| ListFunctions | ✅ |
+| Invoke | ✅ |
+| UpdateFunctionCode | ✅ |
+| UpdateFunctionConfiguration | ✅ |
 
-## Error Codes
+### CloudWatch Logs
 
-RustStack returns exact AWS error codes:
+| Operation | Status |
+|-----------|--------|
+| CreateLogGroup | ✅ |
+| CreateLogStream | ✅ |
+| DescribeLogGroups | ✅ |
+| DescribeLogStreams | ✅ |
+| GetLogEvents | ✅ |
+| PutLogEvents | ✅ |
 
-**S3:**
-- `NoSuchKey` (404) - Object not found
-- `NoSuchBucket` (404) - Bucket not found
-- `BucketAlreadyExists` (409) - Bucket name taken
-- `BucketNotEmpty` (409) - Non-empty bucket delete
+## Differences from LocalStack
 
-**DynamoDB:**
-- `ResourceNotFoundException` - Table not found
-- `ConditionalCheckFailedException` - Condition expression failed
-- `ValidationException` - Invalid request
+1. **No Docker dependency** - RustStack runs Lambda functions as subprocesses, not containers
+2. **In-memory storage** - Data is ephemeral by default (persistence coming soon)
+3. **No Pro features** - RustStack focuses on core services for testing
+4. **Faster startup** - Milliseconds vs seconds
+5. **Lower memory** - ~50MB vs ~300MB+
 
-**Lambda:**
-- `ResourceNotFoundException` - Function not found
-- `InvalidParameterValueException` - Bad parameter
+## Environment Variables
 
-## Flask/Lambda Example
-
-```python
-# app.py
-from flask import Flask
-from mangum import Mangum
-
-app = Flask(__name__)
-
-@app.route('/api/hello')
-def hello():
-    return {'message': 'Hello, World!'}
-
-handler = Mangum(app)
-```
-
-Deploy and test:
-
-```bash
-# Create function
-aws --endpoint-url=http://localhost:4566 lambda create-function \
-    --function-name my-flask-app \
-    --runtime python3.12 \
-    --handler app.handler \
-    --zip-file fileb://function.zip \
-    --role arn:aws:iam::000000000000:role/lambda-role
-
-# Invoke
-aws --endpoint-url=http://localhost:4566 lambda invoke \
-    --function-name my-flask-app \
-    --payload '{"httpMethod":"GET","path":"/api/hello"}' \
-    response.json
-```
-
-## Development
-
-```bash
-# Run tests
-cargo test
-
-# Run with logging
-RUST_LOG=ruststack=debug ./target/release/ruststack
-
-# Format code
-cargo fmt
-
-# Lint
-cargo clippy
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RUSTSTACK_PORT` | Server port | 4566 |
+| `RUSTSTACK_HOST` | Bind address | 0.0.0.0 |
+| `RUSTSTACK_S3` | Enable S3 | true |
+| `RUSTSTACK_DYNAMODB` | Enable DynamoDB | true |
+| `RUSTSTACK_LAMBDA` | Enable Lambda | true |
+| `RUSTSTACK_LOG_LEVEL` | Log level | info |
+| `RUST_LOG` | Detailed log filter | - |
 
 ## Architecture
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design documentation.
+```
+┌─────────────────────────────────────────────────────┐
+│              HTTP Gateway (Axum)                    │
+│  Port 4566 - Service routing by headers/path       │
+└───────────┬───────────┬───────────┬───────────────┘
+            │           │           │
+    ┌───────▼───┐ ┌─────▼─────┐ ┌───▼─────┐
+    │    S3     │ │ DynamoDB  │ │ Lambda  │
+    │(In-Memory)│ │(In-Memory)│ │(Subprocess)│
+    └───────────┘ └───────────┘ └─────────┘
+```
 
-## Roadmap
+## Contributing
 
-- [x] Project structure
-- [x] Core types and error handling
-- [ ] S3 integration with s3s
-- [ ] DynamoDB Local proxy
-- [ ] Lambda container execution
-- [ ] CI/CD pipeline
-- [ ] Docker image
+Contributions welcome! Please read the architecture docs in `ARCHITECTURE.md`.
 
 ## License
 
 MIT OR Apache-2.0
-
-## Comparison with LocalStack
-
-| Feature | RustStack | LocalStack |
-|---------|-----------|------------|
-| Language | Rust | Python |
-| Memory usage | ~50MB | ~500MB+ |
-| Startup time | <1s | ~5s |
-| Services | 3 (focused) | 80+ (broad) |
-| Error fidelity | High | Medium |
-| Open source | Yes | Community/Pro |
-
-RustStack is ideal when you need fast, reliable testing of S3 + DynamoDB + Lambda with exact AWS behavior. LocalStack is better for broad service coverage.

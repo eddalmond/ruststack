@@ -1,8 +1,9 @@
 //! RustStack - High-fidelity AWS Local Emulator
 //!
 //! RustStack provides local implementations of AWS services for development and testing.
-//! Currently supports S3, DynamoDB, and Lambda.
+//! Currently supports S3, DynamoDB, Lambda, and CloudWatch Logs.
 
+mod cloudwatch;
 mod config;
 mod router;
 
