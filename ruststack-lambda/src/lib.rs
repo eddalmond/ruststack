@@ -1,11 +1,13 @@
 //! Lambda implementation for RustStack
 //!
-//! Provides Lambda function execution with Docker containers.
+//! Provides Lambda function execution with subprocess-based Python runtime.
 
 pub mod function;
+pub mod handlers;
 pub mod invocation;
-pub mod service;
 pub mod runtime_api;
+pub mod service;
 
-pub use service::LambdaService;
 pub use function::{Function, FunctionConfig, Runtime};
+pub use handlers::LambdaState;
+pub use service::LambdaService;

@@ -24,6 +24,17 @@ sha2.workspace = true
 # Docker
 bollard.workspace = true
 
+# Zip handling
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+
+# Temp files for code extraction
+tempfile = "3.10"
+
 [dev-dependencies]
 aws-sdk-lambda.workspace = true
 aws-config.workspace = true
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
