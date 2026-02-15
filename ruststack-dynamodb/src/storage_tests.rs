@@ -597,8 +597,8 @@ mod update_item_tests {
             .unwrap()
             .unwrap();
 
-        assert!(result.get("attr1").is_some());
-        assert!(result.get("attr2").is_none());
+        assert!(result.contains_key("attr1"));
+        assert!(!result.contains_key("attr2"));
     }
 
     #[test]
@@ -1118,7 +1118,7 @@ mod query_tests {
         values.insert(":sk1".to_string(), AttributeValue::string("order#003"));
         values.insert(":sk2".to_string(), AttributeValue::string("order#007"));
 
-        let result = s.query(
+        let _result = s.query(
             "Table",
             None,
             "pk = :pk AND sk BETWEEN :sk1 AND :sk2",

@@ -1,8 +1,9 @@
 //! Comprehensive tests for S3 storage backends
 
+#![allow(clippy::field_reassign_with_default)]
+
 use super::*;
 use bytes::Bytes;
-use std::collections::HashMap;
 
 /// Test helper to create storage
 fn storage() -> EphemeralStorage {
@@ -412,8 +413,10 @@ mod metadata_tests {
         let s = storage();
         s.create_bucket("bucket").await.unwrap();
 
-        let mut meta = ObjectMetadata::default();
-        meta.content_type = Some("application/json".to_string());
+        let meta = ObjectMetadata {
+            content_type: Some("application/json".to_string()),
+            ..Default::default()
+        };
 
         s.put_object("bucket", "key", Bytes::from("{}"), meta)
             .await
@@ -457,12 +460,14 @@ mod metadata_tests {
         let s = storage();
         s.create_bucket("bucket").await.unwrap();
 
-        let mut meta = ObjectMetadata::default();
-        meta.content_type = Some("text/plain".to_string());
-        meta.content_encoding = Some("gzip".to_string());
-        meta.content_disposition = Some("attachment; filename=\"test.txt\"".to_string());
-        meta.content_language = Some("en-US".to_string());
-        meta.cache_control = Some("max-age=3600".to_string());
+        let meta = ObjectMetadata {
+            content_type: Some("text/plain".to_string()),
+            content_encoding: Some("gzip".to_string()),
+            content_disposition: Some("attachment; filename=\"test.txt\"".to_string()),
+            content_language: Some("en-US".to_string()),
+            cache_control: Some("max-age=3600".to_string()),
+            ..Default::default()
+        };
 
         s.put_object("bucket", "key", Bytes::from("data"), meta)
             .await

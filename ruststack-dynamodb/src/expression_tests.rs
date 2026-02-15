@@ -607,7 +607,7 @@ mod update_application {
         let update = parse_update_expression("REMOVE to_remove").unwrap();
         apply_update(&mut item, &update, &ctx).unwrap();
 
-        assert!(item.get("to_remove").is_none());
+        assert!(!item.contains_key("to_remove"));
     }
 
     #[test]

@@ -1355,7 +1355,7 @@ mod tests {
         let update = parse_update_expression("REMOVE temp").unwrap();
         apply_update(&mut item, &update, &ctx).unwrap();
 
-        assert!(item.get("temp").is_none());
+        assert!(!item.contains_key("temp"));
     }
 
     #[test]
