@@ -1,6 +1,6 @@
 //! S3 service implementation
 
-use crate::storage::{ObjectStorage, EphemeralStorage};
+use crate::storage::{EphemeralStorage, ObjectStorage};
 use std::sync::Arc;
 
 /// RustStack S3 service

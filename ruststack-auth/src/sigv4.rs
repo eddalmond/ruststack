@@ -148,7 +148,10 @@ fn create_string_to_sign(
     canonical_request: &str,
 ) -> String {
     let canonical_hash = hex::encode(Sha256::digest(canonical_request.as_bytes()));
-    format!("{}\n{}\n{}\n{}", algorithm, timestamp, scope, canonical_hash)
+    format!(
+        "{}\n{}\n{}\n{}",
+        algorithm, timestamp, scope, canonical_hash
+    )
 }
 
 /// Verify a SigV4 signature (placeholder - full implementation needed)

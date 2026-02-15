@@ -43,7 +43,8 @@ impl DynamoDBProxy {
     ) -> Result<bytes::Bytes, DynamoDBError> {
         let url = format!("http://localhost:{}/", self.port);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("X-Amz-Target", format!("DynamoDB_20120810.{}", action))
             .header("Content-Type", "application/x-amz-json-1.0")

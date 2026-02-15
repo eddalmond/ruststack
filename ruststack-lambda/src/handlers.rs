@@ -415,7 +415,10 @@ pub async fn list_functions(
 
     let functions = state.service.list_functions();
     let response = ListFunctionsResponse {
-        functions: functions.iter().map(|f| FunctionResponse::from(f.as_ref())).collect(),
+        functions: functions
+            .iter()
+            .map(|f| FunctionResponse::from(f.as_ref()))
+            .collect(),
         next_marker: None, // TODO: implement pagination
     };
 
@@ -451,7 +454,11 @@ pub async fn update_function_code(
         return invalid_parameter("Must specify either ZipFile or S3Bucket/S3Key");
     };
 
-    match state.service.update_function_code(&function_name, code).await {
+    match state
+        .service
+        .update_function_code(&function_name, code)
+        .await
+    {
         Ok(function) => {
             let response = FunctionResponse::from(function.as_ref());
             Response::builder()
@@ -534,7 +541,11 @@ pub async fn invoke_function(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("None");
 
-    match state.service.invoke(&function_name, body, invocation_type).await {
+    match state
+        .service
+        .invoke(&function_name, body, invocation_type)
+        .await
+    {
         Ok(result) => {
             let mut builder = Response::builder()
                 .status(StatusCode::from_u16(result.status_code as u16).unwrap_or(StatusCode::OK))

@@ -56,19 +56,14 @@ pub fn runtime_api_router(state: Arc<RuntimeApiState>) -> Router {
             "/2018-06-01/runtime/invocation/:request_id/error",
             post(post_invocation_error),
         )
-        .route(
-            "/2018-06-01/runtime/init/error",
-            post(post_init_error),
-        )
+        .route("/2018-06-01/runtime/init/error", post(post_init_error))
         .with_state(state)
 }
 
 /// GET /runtime/invocation/next
-/// 
+///
 /// Blocks until an invocation is available, then returns it.
-async fn get_next_invocation(
-    State(state): State<Arc<RuntimeApiState>>,
-) -> impl IntoResponse {
+async fn get_next_invocation(State(state): State<Arc<RuntimeApiState>>) -> impl IntoResponse {
     debug!("Runtime requesting next invocation");
 
     // Wait for next invocation
@@ -100,8 +95,14 @@ async fn get_next_invocation(
     Response::builder()
         .status(StatusCode::OK)
         .header("Lambda-Runtime-Aws-Request-Id", &invocation.request_id)
-        .header("Lambda-Runtime-Invoked-Function-Arn", &invocation.function_arn)
-        .header("Lambda-Runtime-Deadline-Ms", invocation.deadline_ms.to_string())
+        .header(
+            "Lambda-Runtime-Invoked-Function-Arn",
+            &invocation.function_arn,
+        )
+        .header(
+            "Lambda-Runtime-Deadline-Ms",
+            invocation.deadline_ms.to_string(),
+        )
         .body(Body::from(invocation.payload))
         .unwrap()
 }
@@ -117,7 +118,7 @@ async fn post_invocation_response(
     debug!(request_id = %request_id, "Runtime sending response");
 
     let mut current = state.current_invocation.write().await;
-    
+
     if let Some(invocation) = current.take() {
         if invocation.request_id != request_id {
             error!(
@@ -161,7 +162,8 @@ async fn post_invocation_error(
     if let Some(invocation) = current.take() {
         if let Some(tx) = invocation.response_tx {
             let error_message = String::from_utf8_lossy(&body).to_string();
-            let result = InvocationResult::unhandled_error(error_message, invocation.function_version);
+            let result =
+                InvocationResult::unhandled_error(error_message, invocation.function_version);
             let _ = tx.send(result);
         }
 
@@ -174,10 +176,7 @@ async fn post_invocation_error(
 /// POST /runtime/init/error
 ///
 /// Called when the runtime fails to initialize.
-async fn post_init_error(
-    headers: HeaderMap,
-    body: Bytes,
-) -> impl IntoResponse {
+async fn post_init_error(headers: HeaderMap, body: Bytes) -> impl IntoResponse {
     let error_type = headers
         .get("Lambda-Runtime-Function-Error-Type")
         .and_then(|v| v.to_str().ok())

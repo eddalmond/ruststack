@@ -8,7 +8,6 @@ mod tests;
 
 pub use ephemeral::EphemeralStorage;
 pub use traits::{
-    ObjectStorage, StorageError, StoredObject, ObjectMetadata,
-    PutObjectResult, DeleteResult, ListObjectsResult, ObjectSummary,
-    PartInfo, CompletedPart, CompleteResult
+    CompleteResult, CompletedPart, DeleteResult, ListObjectsResult, ObjectMetadata, ObjectStorage,
+    ObjectSummary, PartInfo, PutObjectResult, StorageError, StoredObject,
 };

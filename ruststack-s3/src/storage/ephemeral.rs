@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::Utc;
 use dashmap::DashMap;
-use md5::{Md5, Digest};
+use md5::{Digest, Md5};
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -80,12 +80,15 @@ impl ObjectStorage for EphemeralStorage {
         if self.buckets.contains_key(bucket) {
             return Err(StorageError::BucketAlreadyExists(bucket.to_string()));
         }
-        self.buckets.insert(bucket.to_string(), Arc::new(InMemoryBucket::new()));
+        self.buckets
+            .insert(bucket.to_string(), Arc::new(InMemoryBucket::new()));
         Ok(())
     }
 
     async fn delete_bucket(&self, bucket: &str) -> Result<(), StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
         if !bucket_ref.objects.is_empty() {
@@ -111,10 +114,14 @@ impl ObjectStorage for EphemeralStorage {
         key: &str,
         _version_id: Option<&str>,
     ) -> Result<StoredObject, StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
-        let obj = bucket_ref.objects.get(key)
+        let obj = bucket_ref
+            .objects
+            .get(key)
             .ok_or_else(|| StorageError::ObjectNotFound {
                 bucket: bucket.to_string(),
                 key: key.to_string(),
@@ -137,17 +144,22 @@ impl ObjectStorage for EphemeralStorage {
         data: Bytes,
         metadata: ObjectMetadata,
     ) -> Result<PutObjectResult, StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
         let etag = Self::compute_etag(&data);
 
-        bucket_ref.objects.insert(key.to_string(), InMemoryObject {
-            data,
-            etag: etag.clone(),
-            last_modified: Utc::now(),
-            metadata,
-        });
+        bucket_ref.objects.insert(
+            key.to_string(),
+            InMemoryObject {
+                data,
+                etag: etag.clone(),
+                last_modified: Utc::now(),
+                metadata,
+            },
+        );
 
         Ok(PutObjectResult {
             etag,
@@ -161,7 +173,9 @@ impl ObjectStorage for EphemeralStorage {
         key: &str,
         _version_id: Option<&str>,
     ) -> Result<DeleteResult, StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
         let deleted = bucket_ref.objects.remove(key).is_some();
@@ -181,7 +195,9 @@ impl ObjectStorage for EphemeralStorage {
         _continuation_token: Option<&str>,
         max_keys: i32,
     ) -> Result<ListObjectsResult, StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
         let prefix = prefix.unwrap_or("");
@@ -243,7 +259,8 @@ impl ObjectStorage for EphemeralStorage {
         let src = self.get_object(src_bucket, src_key, None).await?;
 
         // Put to destination
-        self.put_object(dest_bucket, dest_key, src.data, src.metadata).await
+        self.put_object(dest_bucket, dest_key, src.data, src.metadata)
+            .await
     }
 
     async fn create_multipart_upload(
@@ -252,17 +269,22 @@ impl ObjectStorage for EphemeralStorage {
         key: &str,
         metadata: ObjectMetadata,
     ) -> Result<String, StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
         let upload_id = Uuid::new_v4().to_string();
 
-        bucket_ref.multipart_uploads.insert(upload_id.clone(), MultipartUpload {
-            key: key.to_string(),
-            parts: HashMap::new(),
-            metadata,
-            created_at: Utc::now(),
-        });
+        bucket_ref.multipart_uploads.insert(
+            upload_id.clone(),
+            MultipartUpload {
+                key: key.to_string(),
+                parts: HashMap::new(),
+                metadata,
+                created_at: Utc::now(),
+            },
+        );
 
         Ok(upload_id)
     }
@@ -275,19 +297,26 @@ impl ObjectStorage for EphemeralStorage {
         part_number: i32,
         data: Bytes,
     ) -> Result<PartInfo, StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
-        let mut upload = bucket_ref.multipart_uploads.get_mut(upload_id)
+        let mut upload = bucket_ref
+            .multipart_uploads
+            .get_mut(upload_id)
             .ok_or_else(|| StorageError::UploadNotFound(upload_id.to_string()))?;
 
         let etag = Self::compute_etag(&data);
         let size = data.len() as u64;
 
-        upload.parts.insert(part_number, InMemoryPart {
-            data,
-            etag: etag.clone(),
-        });
+        upload.parts.insert(
+            part_number,
+            InMemoryPart {
+                data,
+                etag: etag.clone(),
+            },
+        );
 
         Ok(PartInfo {
             part_number,
@@ -303,18 +332,23 @@ impl ObjectStorage for EphemeralStorage {
         upload_id: &str,
         parts: Vec<CompletedPart>,
     ) -> Result<CompleteResult, StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
-        let upload = bucket_ref.multipart_uploads.remove(upload_id)
+        let upload = bucket_ref
+            .multipart_uploads
+            .remove(upload_id)
             .ok_or_else(|| StorageError::UploadNotFound(upload_id.to_string()))?
             .1;
 
         // Assemble parts
         let mut combined = Vec::new();
         for completed in &parts {
-            let part = upload.parts.get(&completed.part_number)
-                .ok_or_else(|| StorageError::Internal(format!("Part {} not found", completed.part_number)))?;
+            let part = upload.parts.get(&completed.part_number).ok_or_else(|| {
+                StorageError::Internal(format!("Part {} not found", completed.part_number))
+            })?;
             combined.extend_from_slice(&part.data);
         }
 
@@ -328,15 +362,22 @@ impl ObjectStorage for EphemeralStorage {
         }
         let mut final_hasher = Md5::new();
         final_hasher.update(&etag_parts);
-        let etag = format!("\"{}-{}\"", hex::encode(final_hasher.finalize()), parts.len());
+        let etag = format!(
+            "\"{}-{}\"",
+            hex::encode(final_hasher.finalize()),
+            parts.len()
+        );
 
         // Store the object
-        bucket_ref.objects.insert(key.to_string(), InMemoryObject {
-            data: Bytes::from(combined),
-            etag: etag.clone(),
-            last_modified: Utc::now(),
-            metadata: upload.metadata,
-        });
+        bucket_ref.objects.insert(
+            key.to_string(),
+            InMemoryObject {
+                data: Bytes::from(combined),
+                etag: etag.clone(),
+                last_modified: Utc::now(),
+                metadata: upload.metadata,
+            },
+        );
 
         Ok(CompleteResult {
             etag,
@@ -350,7 +391,9 @@ impl ObjectStorage for EphemeralStorage {
         _key: &str,
         upload_id: &str,
     ) -> Result<(), StorageError> {
-        let bucket_ref = self.buckets.get(bucket)
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
             .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
 
         bucket_ref.multipart_uploads.remove(upload_id);
@@ -386,20 +429,29 @@ mod tests {
         storage.create_bucket("test-bucket").await.unwrap();
 
         // Put object
-        let result = storage.put_object(
-            "test-bucket",
-            "test-key",
-            Bytes::from("hello world"),
-            ObjectMetadata::default(),
-        ).await.unwrap();
+        let result = storage
+            .put_object(
+                "test-bucket",
+                "test-key",
+                Bytes::from("hello world"),
+                ObjectMetadata::default(),
+            )
+            .await
+            .unwrap();
         assert!(!result.etag.is_empty());
 
         // Get object
-        let obj = storage.get_object("test-bucket", "test-key", None).await.unwrap();
+        let obj = storage
+            .get_object("test-bucket", "test-key", None)
+            .await
+            .unwrap();
         assert_eq!(&obj.data[..], b"hello world");
 
         // Delete object
-        storage.delete_object("test-bucket", "test-key", None).await.unwrap();
+        storage
+            .delete_object("test-bucket", "test-key", None)
+            .await
+            .unwrap();
 
         // Verify deleted
         let err = storage.get_object("test-bucket", "test-key", None).await;
@@ -412,45 +464,62 @@ mod tests {
         storage.create_bucket("test-bucket").await.unwrap();
 
         // Create multipart upload
-        let upload_id = storage.create_multipart_upload(
-            "test-bucket",
-            "large-object",
-            ObjectMetadata::default(),
-        ).await.unwrap();
+        let upload_id = storage
+            .create_multipart_upload("test-bucket", "large-object", ObjectMetadata::default())
+            .await
+            .unwrap();
 
         // Upload parts
-        let part1 = storage.upload_part(
-            "test-bucket",
-            "large-object",
-            &upload_id,
-            1,
-            Bytes::from("part1"),
-        ).await.unwrap();
+        let part1 = storage
+            .upload_part(
+                "test-bucket",
+                "large-object",
+                &upload_id,
+                1,
+                Bytes::from("part1"),
+            )
+            .await
+            .unwrap();
 
-        let part2 = storage.upload_part(
-            "test-bucket",
-            "large-object",
-            &upload_id,
-            2,
-            Bytes::from("part2"),
-        ).await.unwrap();
+        let part2 = storage
+            .upload_part(
+                "test-bucket",
+                "large-object",
+                &upload_id,
+                2,
+                Bytes::from("part2"),
+            )
+            .await
+            .unwrap();
 
         // Complete upload
-        let result = storage.complete_multipart_upload(
-            "test-bucket",
-            "large-object",
-            &upload_id,
-            vec![
-                CompletedPart { part_number: 1, etag: part1.etag },
-                CompletedPart { part_number: 2, etag: part2.etag },
-            ],
-        ).await.unwrap();
+        let result = storage
+            .complete_multipart_upload(
+                "test-bucket",
+                "large-object",
+                &upload_id,
+                vec![
+                    CompletedPart {
+                        part_number: 1,
+                        etag: part1.etag,
+                    },
+                    CompletedPart {
+                        part_number: 2,
+                        etag: part2.etag,
+                    },
+                ],
+            )
+            .await
+            .unwrap();
 
         // Verify ETag format (multipart)
         assert!(result.etag.ends_with("-2\""));
 
         // Verify object contents
-        let obj = storage.get_object("test-bucket", "large-object", None).await.unwrap();
+        let obj = storage
+            .get_object("test-bucket", "large-object", None)
+            .await
+            .unwrap();
         assert_eq!(&obj.data[..], b"part1part2");
     }
 }

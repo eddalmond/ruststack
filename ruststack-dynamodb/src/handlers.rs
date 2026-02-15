@@ -43,9 +43,7 @@ pub async fn handle_request(
     // Parse request body as JSON
     let body_json: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
-        Err(e) => {
-            return error_response("SerializationException", &format!("Invalid JSON: {}", e))
-        }
+        Err(e) => return error_response("SerializationException", &format!("Invalid JSON: {}", e)),
     };
 
     // Route to appropriate handler
@@ -168,9 +166,7 @@ fn handle_list_tables(storage: &DynamoDBStorage, body: &Value) -> Result<Value, 
         .get("Limit")
         .and_then(|v| v.as_u64())
         .map(|n| n as usize);
-    let exclusive_start = body
-        .get("ExclusiveStartTableName")
-        .and_then(|v| v.as_str());
+    let exclusive_start = body.get("ExclusiveStartTableName").and_then(|v| v.as_str());
 
     let mut names: Vec<String> = table_names;
     names.sort();
@@ -344,7 +340,10 @@ fn handle_query(storage: &DynamoDBStorage, body: &Value) -> Result<Value, Dynamo
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let limit = body.get("Limit").and_then(|v| v.as_u64()).map(|n| n as usize);
+    let limit = body
+        .get("Limit")
+        .and_then(|v| v.as_u64())
+        .map(|n| n as usize);
 
     let exclusive_start_key = body
         .get("ExclusiveStartKey")
@@ -387,7 +386,10 @@ fn handle_scan(storage: &DynamoDBStorage, body: &Value) -> Result<Value, DynamoD
     let expression_attribute_names = parse_expression_attribute_names(body);
     let expression_attribute_values = parse_expression_attribute_values(body)?;
 
-    let limit = body.get("Limit").and_then(|v| v.as_u64()).map(|n| n as usize);
+    let limit = body
+        .get("Limit")
+        .and_then(|v| v.as_u64())
+        .map(|n| n as usize);
 
     let exclusive_start_key = body
         .get("ExclusiveStartKey")
@@ -420,10 +422,7 @@ fn handle_scan(storage: &DynamoDBStorage, body: &Value) -> Result<Value, DynamoD
 
 // === Batch Operations ===
 
-fn handle_batch_get_item(
-    storage: &DynamoDBStorage,
-    body: &Value,
-) -> Result<Value, DynamoDBError> {
+fn handle_batch_get_item(storage: &DynamoDBStorage, body: &Value) -> Result<Value, DynamoDBError> {
     let request_items = body
         .get("RequestItems")
         .and_then(|v| v.as_object())
@@ -501,7 +500,11 @@ fn parse_key_schema_element(value: &Value) -> Result<KeySchemaElement, DynamoDBE
         key_type: match value["KeyType"].as_str() {
             Some("HASH") => KeyType::HASH,
             Some("RANGE") => KeyType::RANGE,
-            _ => return Err(DynamoDBError::ValidationError("Invalid KeyType".to_string())),
+            _ => {
+                return Err(DynamoDBError::ValidationError(
+                    "Invalid KeyType".to_string(),
+                ))
+            }
         },
     })
 }
@@ -626,9 +629,7 @@ fn parse_expression_attribute_values(
         .and_then(|v| v.as_object())
         .map(|obj| {
             obj.iter()
-                .map(|(k, v)| {
-                    parse_attribute_value(v).map(|av| (k.clone(), av))
-                })
+                .map(|(k, v)| parse_attribute_value(v).map(|av| (k.clone(), av)))
                 .collect::<Result<HashMap<_, _>, _>>()
         })
         .transpose()
@@ -762,9 +763,10 @@ fn dynamodb_error_response(error: &DynamoDBError) -> Response {
         DynamoDBError::ConditionalCheckFailed => {
             ("ConditionalCheckFailedException", StatusCode::BAD_REQUEST)
         }
-        DynamoDBError::ProvisionedThroughputExceeded => {
-            ("ProvisionedThroughputExceededException", StatusCode::BAD_REQUEST)
-        }
+        DynamoDBError::ProvisionedThroughputExceeded => (
+            "ProvisionedThroughputExceededException",
+            StatusCode::BAD_REQUEST,
+        ),
         DynamoDBError::Internal(_) => ("InternalServerError", StatusCode::INTERNAL_SERVER_ERROR),
         DynamoDBError::Expression(_) => ("ValidationException", StatusCode::BAD_REQUEST),
     };

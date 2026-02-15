@@ -135,7 +135,12 @@ pub struct Function {
 
 impl Function {
     /// Create a new function
-    pub fn new(config: FunctionConfig, code: FunctionCode, code_sha256: String, code_size: i64) -> Self {
+    pub fn new(
+        config: FunctionConfig,
+        code: FunctionCode,
+        code_sha256: String,
+        code_size: i64,
+    ) -> Self {
         let arn = format!(
             "arn:aws:lambda:us-east-1:000000000000:function:{}",
             config.function_name

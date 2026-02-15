@@ -4,4 +4,4 @@
 
 pub mod sigv4;
 
-pub use sigv4::{SigV4Error, verify_signature};
+pub use sigv4::{verify_signature, SigV4Error};

@@ -73,7 +73,9 @@ impl ErrorCode {
             Self::ResourceInUseException => "ResourceInUseException",
             Self::ValidationException => "ValidationException",
             Self::ConditionalCheckFailedException => "ConditionalCheckFailedException",
-            Self::ProvisionedThroughputExceededException => "ProvisionedThroughputExceededException",
+            Self::ProvisionedThroughputExceededException => {
+                "ProvisionedThroughputExceededException"
+            }
             Self::TransactionConflictException => "TransactionConflictException",
             Self::ResourceNotFound => "ResourceNotFound",
             Self::InvalidParameterValue => "InvalidParameterValueException",
@@ -85,12 +87,21 @@ impl ErrorCode {
     pub fn http_status(&self) -> u16 {
         match self {
             Self::AccessDenied | Self::InvalidAccessKeyId | Self::InvalidSignature => 403,
-            Self::NoSuchBucket | Self::NoSuchKey | Self::NoSuchUpload
-            | Self::ResourceNotFoundException | Self::ResourceNotFound => 404,
-            Self::BucketAlreadyExists | Self::BucketAlreadyOwnedByYou
-            | Self::ResourceInUseException | Self::TransactionConflictException => 409,
-            Self::InvalidArgument | Self::InvalidBucketName | Self::ValidationException
-            | Self::InvalidParameterValue | Self::InvalidPart | Self::InvalidPartOrder => 400,
+            Self::NoSuchBucket
+            | Self::NoSuchKey
+            | Self::NoSuchUpload
+            | Self::ResourceNotFoundException
+            | Self::ResourceNotFound => 404,
+            Self::BucketAlreadyExists
+            | Self::BucketAlreadyOwnedByYou
+            | Self::ResourceInUseException
+            | Self::TransactionConflictException => 409,
+            Self::InvalidArgument
+            | Self::InvalidBucketName
+            | Self::ValidationException
+            | Self::InvalidParameterValue
+            | Self::InvalidPart
+            | Self::InvalidPartOrder => 400,
             Self::EntityTooLarge => 400,
             Self::EntityTooSmall => 400,
             Self::BucketNotEmpty => 409,
@@ -169,7 +180,11 @@ impl AwsError {
         };
 
         serde_json::to_string(&error).unwrap_or_else(|_| {
-            format!(r#"{{"__type":"{}","message":"{}"}}"#, self.code.as_str(), self.message)
+            format!(
+                r#"{{"__type":"{}","message":"{}"}}"#,
+                self.code.as_str(),
+                self.message
+            )
         })
     }
 }
@@ -180,9 +195,12 @@ mod tests {
 
     #[test]
     fn test_error_xml_format() {
-        let error = AwsError::new(ErrorCode::NoSuchBucket, "The specified bucket does not exist")
-            .with_resource("my-bucket")
-            .with_request_id("test-request-id");
+        let error = AwsError::new(
+            ErrorCode::NoSuchBucket,
+            "The specified bucket does not exist",
+        )
+        .with_resource("my-bucket")
+        .with_request_id("test-request-id");
 
         let xml = error.to_xml();
         assert!(xml.contains("<Code>NoSuchBucket</Code>"));

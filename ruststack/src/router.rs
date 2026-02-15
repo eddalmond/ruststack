@@ -59,16 +59,12 @@ impl AppState {
 }
 
 /// Middleware to add x-amzn-requestid header to all responses
-async fn add_request_id(
-    request: axum::http::Request<Body>,
-    next: Next,
-) -> Response {
+async fn add_request_id(request: axum::http::Request<Body>, next: Next) -> Response {
     let mut response = next.run(request).await;
     let request_id = uuid::Uuid::new_v4().to_string();
-    response.headers_mut().insert(
-        "x-amzn-requestid",
-        request_id.parse().unwrap(),
-    );
+    response
+        .headers_mut()
+        .insert("x-amzn-requestid", request_id.parse().unwrap());
     response
 }
 
@@ -212,8 +208,12 @@ async fn update_function_code(
     if !state.lambda_enabled {
         return service_disabled("lambda");
     }
-    lambda_handlers::update_function_code(State(state.lambda.clone()), Path(function_name), Json(req))
-        .await
+    lambda_handlers::update_function_code(
+        State(state.lambda.clone()),
+        Path(function_name),
+        Json(req),
+    )
+    .await
 }
 
 async fn invoke_function(
@@ -225,8 +225,13 @@ async fn invoke_function(
     if !state.lambda_enabled {
         return service_disabled("lambda");
     }
-    lambda_handlers::invoke_function(State(state.lambda.clone()), Path(function_name), headers, body)
-        .await
+    lambda_handlers::invoke_function(
+        State(state.lambda.clone()),
+        Path(function_name),
+        headers,
+        body,
+    )
+    .await
 }
 
 // === S3 / DynamoDB / CloudWatch Logs routing ===

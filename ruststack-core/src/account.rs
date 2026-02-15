@@ -101,13 +101,7 @@ mod tests {
         store.get_or_create("123456789012", "us-east-1").counter = 1;
         store.get_or_create("123456789012", "us-west-2").counter = 2;
 
-        assert_eq!(
-            store.get("123456789012", "us-east-1").unwrap().counter,
-            1
-        );
-        assert_eq!(
-            store.get("123456789012", "us-west-2").unwrap().counter,
-            2
-        );
+        assert_eq!(store.get("123456789012", "us-east-1").unwrap().counter, 1);
+        assert_eq!(store.get("123456789012", "us-west-2").unwrap().counter, 2);
     }
 }

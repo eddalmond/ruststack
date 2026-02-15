@@ -31,27 +31,29 @@ impl CloudWatchLogsState {
     /// Store a log event (called by Lambda after invocation)
     pub fn put_log_event(&self, group_name: &str, stream_name: &str, message: String) {
         let timestamp = Utc::now().timestamp_millis();
-        
+
         // Get or create log group
-        let mut group = self.log_groups.entry(group_name.to_string()).or_insert_with(|| {
-            LogGroup {
+        let mut group = self
+            .log_groups
+            .entry(group_name.to_string())
+            .or_insert_with(|| LogGroup {
                 log_group_name: group_name.to_string(),
                 creation_time: timestamp,
                 streams: DashMap::new(),
-            }
-        });
+            });
 
         // Get or create log stream
-        let mut stream = group.streams.entry(stream_name.to_string()).or_insert_with(|| {
-            LogStream {
+        let mut stream = group
+            .streams
+            .entry(stream_name.to_string())
+            .or_insert_with(|| LogStream {
                 log_stream_name: stream_name.to_string(),
                 creation_time: timestamp,
                 first_event_timestamp: Some(timestamp),
                 last_event_timestamp: Some(timestamp),
                 last_ingestion_time: Some(timestamp),
                 events: Vec::new(),
-            }
-        });
+            });
 
         stream.events.push(LogEvent {
             timestamp,
@@ -240,9 +242,7 @@ pub async fn handle_logs_request(
     // Parse body
     let body_json: serde_json::Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
-        Err(e) => {
-            return error_response("SerializationException", &format!("Invalid JSON: {}", e))
-        }
+        Err(e) => return error_response("SerializationException", &format!("Invalid JSON: {}", e)),
     };
 
     match action {
@@ -259,10 +259,7 @@ pub async fn handle_logs_request(
     }
 }
 
-fn handle_describe_log_groups(
-    state: &CloudWatchLogsState,
-    body: serde_json::Value,
-) -> Response {
+fn handle_describe_log_groups(state: &CloudWatchLogsState, body: serde_json::Value) -> Response {
     let req: DescribeLogGroupsRequest = match serde_json::from_value(body) {
         Ok(r) => r,
         Err(e) => return error_response("InvalidParameterException", &e.to_string()),
@@ -301,10 +298,7 @@ fn handle_describe_log_groups(
     })
 }
 
-fn handle_describe_log_streams(
-    state: &CloudWatchLogsState,
-    body: serde_json::Value,
-) -> Response {
+fn handle_describe_log_streams(state: &CloudWatchLogsState, body: serde_json::Value) -> Response {
     let req: DescribeLogStreamsRequest = match serde_json::from_value(body) {
         Ok(r) => r,
         Err(e) => return error_response("InvalidParameterException", &e.to_string()),
@@ -315,7 +309,10 @@ fn handle_describe_log_streams(
         None => {
             return error_response(
                 "ResourceNotFoundException",
-                &format!("The specified log group does not exist: {}", req.log_group_name),
+                &format!(
+                    "The specified log group does not exist: {}",
+                    req.log_group_name
+                ),
             )
         }
     };
@@ -382,7 +379,10 @@ fn handle_get_log_events(state: &CloudWatchLogsState, body: serde_json::Value) -
         None => {
             return error_response(
                 "ResourceNotFoundException",
-                &format!("The specified log group does not exist: {}", req.log_group_name),
+                &format!(
+                    "The specified log group does not exist: {}",
+                    req.log_group_name
+                ),
             )
         }
     };
@@ -452,7 +452,10 @@ fn handle_create_log_group(state: &CloudWatchLogsState, body: serde_json::Value)
     if state.log_groups.contains_key(&req.log_group_name) {
         return error_response(
             "ResourceAlreadyExistsException",
-            &format!("The specified log group already exists: {}", req.log_group_name),
+            &format!(
+                "The specified log group already exists: {}",
+                req.log_group_name
+            ),
         );
     }
 
@@ -484,7 +487,10 @@ fn handle_create_log_stream(state: &CloudWatchLogsState, body: serde_json::Value
         None => {
             return error_response(
                 "ResourceNotFoundException",
-                &format!("The specified log group does not exist: {}", req.log_group_name),
+                &format!(
+                    "The specified log group does not exist: {}",
+                    req.log_group_name
+                ),
             )
         }
     };
@@ -530,7 +536,10 @@ fn handle_put_log_events(state: &CloudWatchLogsState, body: serde_json::Value) -
         None => {
             return error_response(
                 "ResourceNotFoundException",
-                &format!("The specified log group does not exist: {}", req.log_group_name),
+                &format!(
+                    "The specified log group does not exist: {}",
+                    req.log_group_name
+                ),
             )
         }
     };
@@ -584,7 +593,7 @@ fn error_response(error_type: &str, message: &str) -> Response {
         "__type": error_type,
         "message": message
     });
-    
+
     let status = match error_type {
         "ResourceNotFoundException" => StatusCode::BAD_REQUEST,
         "ResourceAlreadyExistsException" => StatusCode::BAD_REQUEST,

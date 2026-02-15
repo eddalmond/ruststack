@@ -40,7 +40,7 @@ impl Default for RequestId {
 }
 
 fn base64_encode(data: &[u8]) -> String {
-    use base64::{Engine, engine::general_purpose};
+    use base64::{engine::general_purpose, Engine};
     general_purpose::STANDARD.encode(data)
 }
 

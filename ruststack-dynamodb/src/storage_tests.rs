@@ -12,55 +12,59 @@ fn storage() -> DynamoDBStorage {
 }
 
 fn simple_table(storage: &DynamoDBStorage, name: &str) {
-    storage.create_table(
-        name,
-        vec![KeySchemaElement {
-            attribute_name: "pk".to_string(),
-            key_type: KeyType::HASH,
-        }],
-        vec![AttributeDefinition {
-            attribute_name: "pk".to_string(),
-            attribute_type: AttributeType::S,
-        }],
-        ProvisionedThroughput {
-            read_capacity_units: 5,
-            write_capacity_units: 5,
-        },
-        None,
-        None,
-    ).unwrap();
+    storage
+        .create_table(
+            name,
+            vec![KeySchemaElement {
+                attribute_name: "pk".to_string(),
+                key_type: KeyType::HASH,
+            }],
+            vec![AttributeDefinition {
+                attribute_name: "pk".to_string(),
+                attribute_type: AttributeType::S,
+            }],
+            ProvisionedThroughput {
+                read_capacity_units: 5,
+                write_capacity_units: 5,
+            },
+            None,
+            None,
+        )
+        .unwrap();
 }
 
 fn composite_table(storage: &DynamoDBStorage, name: &str) {
-    storage.create_table(
-        name,
-        vec![
-            KeySchemaElement {
-                attribute_name: "pk".to_string(),
-                key_type: KeyType::HASH,
+    storage
+        .create_table(
+            name,
+            vec![
+                KeySchemaElement {
+                    attribute_name: "pk".to_string(),
+                    key_type: KeyType::HASH,
+                },
+                KeySchemaElement {
+                    attribute_name: "sk".to_string(),
+                    key_type: KeyType::RANGE,
+                },
+            ],
+            vec![
+                AttributeDefinition {
+                    attribute_name: "pk".to_string(),
+                    attribute_type: AttributeType::S,
+                },
+                AttributeDefinition {
+                    attribute_name: "sk".to_string(),
+                    attribute_type: AttributeType::S,
+                },
+            ],
+            ProvisionedThroughput {
+                read_capacity_units: 5,
+                write_capacity_units: 5,
             },
-            KeySchemaElement {
-                attribute_name: "sk".to_string(),
-                key_type: KeyType::RANGE,
-            },
-        ],
-        vec![
-            AttributeDefinition {
-                attribute_name: "pk".to_string(),
-                attribute_type: AttributeType::S,
-            },
-            AttributeDefinition {
-                attribute_name: "sk".to_string(),
-                attribute_type: AttributeType::S,
-            },
-        ],
-        ProvisionedThroughput {
-            read_capacity_units: 5,
-            write_capacity_units: 5,
-        },
-        None,
-        None,
-    ).unwrap();
+            None,
+            None,
+        )
+        .unwrap();
 }
 
 fn make_item(attrs: Vec<(&str, AttributeValue)>) -> Item {
@@ -77,23 +81,25 @@ mod table_tests {
     #[test]
     fn test_create_table() {
         let s = storage();
-        let desc = s.create_table(
-            "TestTable",
-            vec![KeySchemaElement {
-                attribute_name: "id".to_string(),
-                key_type: KeyType::HASH,
-            }],
-            vec![AttributeDefinition {
-                attribute_name: "id".to_string(),
-                attribute_type: AttributeType::S,
-            }],
-            ProvisionedThroughput {
-                read_capacity_units: 10,
-                write_capacity_units: 5,
-            },
-            None,
-            None,
-        ).unwrap();
+        let desc = s
+            .create_table(
+                "TestTable",
+                vec![KeySchemaElement {
+                    attribute_name: "id".to_string(),
+                    key_type: KeyType::HASH,
+                }],
+                vec![AttributeDefinition {
+                    attribute_name: "id".to_string(),
+                    attribute_type: AttributeType::S,
+                }],
+                ProvisionedThroughput {
+                    read_capacity_units: 10,
+                    write_capacity_units: 5,
+                },
+                None,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(desc.table_name, "TestTable");
         assert_eq!(desc.table_status, TableStatus::ACTIVE);
@@ -104,7 +110,7 @@ mod table_tests {
     fn test_create_table_already_exists() {
         let s = storage();
         simple_table(&s, "Table");
-        
+
         let result = s.create_table(
             "Table",
             vec![KeySchemaElement {
@@ -153,8 +159,11 @@ mod table_tests {
             s.put_item(
                 "Table",
                 make_item(vec![("pk", AttributeValue::string(format!("item{}", i)))]),
-                None, None, None,
-            ).unwrap();
+                None,
+                None,
+                None,
+            )
+            .unwrap();
         }
 
         let desc = s.describe_table("Table").unwrap();
@@ -205,40 +214,42 @@ mod table_tests {
     #[test]
     fn test_create_table_with_gsi() {
         let s = storage();
-        let desc = s.create_table(
-            "Table",
-            vec![KeySchemaElement {
-                attribute_name: "pk".to_string(),
-                key_type: KeyType::HASH,
-            }],
-            vec![
-                AttributeDefinition {
+        let desc = s
+            .create_table(
+                "Table",
+                vec![KeySchemaElement {
                     attribute_name: "pk".to_string(),
-                    attribute_type: AttributeType::S,
-                },
-                AttributeDefinition {
-                    attribute_name: "email".to_string(),
-                    attribute_type: AttributeType::S,
-                },
-            ],
-            ProvisionedThroughput {
-                read_capacity_units: 5,
-                write_capacity_units: 5,
-            },
-            Some(vec![GlobalSecondaryIndex {
-                index_name: "email-index".to_string(),
-                key_schema: vec![KeySchemaElement {
-                    attribute_name: "email".to_string(),
                     key_type: KeyType::HASH,
                 }],
-                projection: Projection {
-                    projection_type: ProjectionType::ALL,
-                    non_key_attributes: None,
+                vec![
+                    AttributeDefinition {
+                        attribute_name: "pk".to_string(),
+                        attribute_type: AttributeType::S,
+                    },
+                    AttributeDefinition {
+                        attribute_name: "email".to_string(),
+                        attribute_type: AttributeType::S,
+                    },
+                ],
+                ProvisionedThroughput {
+                    read_capacity_units: 5,
+                    write_capacity_units: 5,
                 },
-                provisioned_throughput: None,
-            }]),
-            None,
-        ).unwrap();
+                Some(vec![GlobalSecondaryIndex {
+                    index_name: "email-index".to_string(),
+                    key_schema: vec![KeySchemaElement {
+                        attribute_name: "email".to_string(),
+                        key_type: KeyType::HASH,
+                    }],
+                    projection: Projection {
+                        projection_type: ProjectionType::ALL,
+                        non_key_attributes: None,
+                    },
+                    provisioned_throughput: None,
+                }]),
+                None,
+            )
+            .unwrap();
 
         assert!(desc.global_secondary_indexes.is_some());
         let gsis = desc.global_secondary_indexes.unwrap();
@@ -250,55 +261,57 @@ mod table_tests {
     #[test]
     fn test_create_table_with_lsi() {
         let s = storage();
-        let desc = s.create_table(
-            "Table",
-            vec![
-                KeySchemaElement {
-                    attribute_name: "pk".to_string(),
-                    key_type: KeyType::HASH,
-                },
-                KeySchemaElement {
-                    attribute_name: "sk".to_string(),
-                    key_type: KeyType::RANGE,
-                },
-            ],
-            vec![
-                AttributeDefinition {
-                    attribute_name: "pk".to_string(),
-                    attribute_type: AttributeType::S,
-                },
-                AttributeDefinition {
-                    attribute_name: "sk".to_string(),
-                    attribute_type: AttributeType::S,
-                },
-                AttributeDefinition {
-                    attribute_name: "created_at".to_string(),
-                    attribute_type: AttributeType::N,
-                },
-            ],
-            ProvisionedThroughput {
-                read_capacity_units: 5,
-                write_capacity_units: 5,
-            },
-            None,
-            Some(vec![LocalSecondaryIndex {
-                index_name: "created-index".to_string(),
-                key_schema: vec![
+        let desc = s
+            .create_table(
+                "Table",
+                vec![
                     KeySchemaElement {
                         attribute_name: "pk".to_string(),
                         key_type: KeyType::HASH,
                     },
                     KeySchemaElement {
-                        attribute_name: "created_at".to_string(),
+                        attribute_name: "sk".to_string(),
                         key_type: KeyType::RANGE,
                     },
                 ],
-                projection: Projection {
-                    projection_type: ProjectionType::KEYS_ONLY,
-                    non_key_attributes: None,
+                vec![
+                    AttributeDefinition {
+                        attribute_name: "pk".to_string(),
+                        attribute_type: AttributeType::S,
+                    },
+                    AttributeDefinition {
+                        attribute_name: "sk".to_string(),
+                        attribute_type: AttributeType::S,
+                    },
+                    AttributeDefinition {
+                        attribute_name: "created_at".to_string(),
+                        attribute_type: AttributeType::N,
+                    },
+                ],
+                ProvisionedThroughput {
+                    read_capacity_units: 5,
+                    write_capacity_units: 5,
                 },
-            }]),
-        ).unwrap();
+                None,
+                Some(vec![LocalSecondaryIndex {
+                    index_name: "created-index".to_string(),
+                    key_schema: vec![
+                        KeySchemaElement {
+                            attribute_name: "pk".to_string(),
+                            key_type: KeyType::HASH,
+                        },
+                        KeySchemaElement {
+                            attribute_name: "created_at".to_string(),
+                            key_type: KeyType::RANGE,
+                        },
+                    ],
+                    projection: Projection {
+                        projection_type: ProjectionType::KEYS_ONLY,
+                        non_key_attributes: None,
+                    },
+                }]),
+            )
+            .unwrap();
 
         assert!(desc.local_secondary_indexes.is_some());
         let lsis = desc.local_secondary_indexes.unwrap();
@@ -332,7 +345,10 @@ mod item_crud_tests {
 
         assert!(result.is_some());
         let retrieved = result.unwrap();
-        assert_eq!(retrieved.get("name").unwrap().as_string().unwrap(), "Test Item");
+        assert_eq!(
+            retrieved.get("name").unwrap().as_string().unwrap(),
+            "Test Item"
+        );
         assert_eq!(retrieved.get("count").unwrap().as_number().unwrap(), "42");
     }
 
@@ -340,7 +356,7 @@ mod item_crud_tests {
     fn test_put_item_table_not_found() {
         let s = storage();
         let item = make_item(vec![("pk", AttributeValue::string("item1"))]);
-        
+
         let result = s.put_item("NonExistent", item, None, None, None);
         assert!(matches!(result, Err(DynamoDBError::ResourceNotFound(_))));
     }
@@ -359,7 +375,7 @@ mod item_crud_tests {
     fn test_get_item_table_not_found() {
         let s = storage();
         let key = make_item(vec![("pk", AttributeValue::string("item1"))]);
-        
+
         let result = s.get_item("NonExistent", key, None, None);
         assert!(matches!(result, Err(DynamoDBError::ResourceNotFound(_))));
     }
@@ -398,9 +414,14 @@ mod item_crud_tests {
         s.put_item("Table", item, None, None, None).unwrap();
 
         let key = make_item(vec![("pk", AttributeValue::string("item1"))]);
-        let deleted = s.delete_item("Table", key.clone(), None, None, None).unwrap();
+        let deleted = s
+            .delete_item("Table", key.clone(), None, None, None)
+            .unwrap();
         assert!(deleted.is_some());
-        assert_eq!(deleted.unwrap().get("data").unwrap().as_string().unwrap(), "test");
+        assert_eq!(
+            deleted.unwrap().get("data").unwrap().as_string().unwrap(),
+            "test"
+        );
 
         // Verify deleted
         let result = s.get_item("Table", key, None, None).unwrap();
@@ -460,19 +481,21 @@ mod update_item_tests {
         let mut values = HashMap::new();
         values.insert(":newname".to_string(), AttributeValue::string("updated"));
 
-        let result = s.update_item(
-            "Table",
-            key.clone(),
-            "SET #name = :newname",
-            None,
-            Some(&{
-                let mut names = HashMap::new();
-                names.insert("#name".to_string(), "name".to_string());
-                names
-            }),
-            Some(&values),
-            ReturnValues::AllNew,
-        ).unwrap();
+        let result = s
+            .update_item(
+                "Table",
+                key.clone(),
+                "SET #name = :newname",
+                None,
+                Some(&{
+                    let mut names = HashMap::new();
+                    names.insert("#name".to_string(), "name".to_string());
+                    names
+                }),
+                Some(&values),
+                ReturnValues::AllNew,
+            )
+            .unwrap();
 
         let updated = result.unwrap();
         assert_eq!(updated.get("name").unwrap().as_string().unwrap(), "updated");
@@ -493,19 +516,22 @@ mod update_item_tests {
         let mut values = HashMap::new();
         values.insert(":inc".to_string(), AttributeValue::number("5"));
 
-        let result = s.update_item(
-            "Table",
-            key,
-            "SET #count = #count + :inc",
-            None,
-            Some(&{
-                let mut names = HashMap::new();
-                names.insert("#count".to_string(), "count".to_string());
-                names
-            }),
-            Some(&values),
-            ReturnValues::AllNew,
-        ).unwrap().unwrap();
+        let result = s
+            .update_item(
+                "Table",
+                key,
+                "SET #count = #count + :inc",
+                None,
+                Some(&{
+                    let mut names = HashMap::new();
+                    names.insert("#count".to_string(), "count".to_string());
+                    names
+                }),
+                Some(&values),
+                ReturnValues::AllNew,
+            )
+            .unwrap()
+            .unwrap();
 
         assert_eq!(result.get("count").unwrap().as_number().unwrap(), "15");
     }
@@ -525,19 +551,22 @@ mod update_item_tests {
         let mut values = HashMap::new();
         values.insert(":dec".to_string(), AttributeValue::number("30"));
 
-        let result = s.update_item(
-            "Table",
-            key,
-            "SET #count = #count - :dec",
-            None,
-            Some(&{
-                let mut names = HashMap::new();
-                names.insert("#count".to_string(), "count".to_string());
-                names
-            }),
-            Some(&values),
-            ReturnValues::AllNew,
-        ).unwrap().unwrap();
+        let result = s
+            .update_item(
+                "Table",
+                key,
+                "SET #count = #count - :dec",
+                None,
+                Some(&{
+                    let mut names = HashMap::new();
+                    names.insert("#count".to_string(), "count".to_string());
+                    names
+                }),
+                Some(&values),
+                ReturnValues::AllNew,
+            )
+            .unwrap()
+            .unwrap();
 
         assert_eq!(result.get("count").unwrap().as_number().unwrap(), "70");
     }
@@ -555,13 +584,18 @@ mod update_item_tests {
         s.put_item("Table", item, None, None, None).unwrap();
 
         let key = make_item(vec![("pk", AttributeValue::string("item1"))]);
-        let result = s.update_item(
-            "Table",
-            key,
-            "REMOVE attr2",
-            None, None, None,
-            ReturnValues::AllNew,
-        ).unwrap().unwrap();
+        let result = s
+            .update_item(
+                "Table",
+                key,
+                "REMOVE attr2",
+                None,
+                None,
+                None,
+                ReturnValues::AllNew,
+            )
+            .unwrap()
+            .unwrap();
 
         assert!(result.get("attr1").is_some());
         assert!(result.get("attr2").is_none());
@@ -572,9 +606,7 @@ mod update_item_tests {
         let s = storage();
         simple_table(&s, "Table");
 
-        let item = make_item(vec![
-            ("pk", AttributeValue::string("item1")),
-        ]);
+        let item = make_item(vec![("pk", AttributeValue::string("item1"))]);
         s.put_item("Table", item, None, None, None).unwrap();
 
         let key = make_item(vec![("pk", AttributeValue::string("item1"))]);
@@ -594,9 +626,13 @@ mod update_item_tests {
             }),
             Some(&values),
             ReturnValues::None,
-        ).unwrap();
+        )
+        .unwrap();
 
-        let result = s.get_item("Table", key.clone(), None, None).unwrap().unwrap();
+        let result = s
+            .get_item("Table", key.clone(), None, None)
+            .unwrap()
+            .unwrap();
         assert_eq!(result.get("count").unwrap().as_number().unwrap(), "10");
 
         // Second update - should keep existing value (10), not use default
@@ -613,7 +649,8 @@ mod update_item_tests {
             }),
             Some(&values),
             ReturnValues::None,
-        ).unwrap();
+        )
+        .unwrap();
 
         let result = s.get_item("Table", key, None, None).unwrap().unwrap();
         // Should still be 10, not 999
@@ -635,22 +672,28 @@ mod update_item_tests {
         let mut values = HashMap::new();
         values.insert(":new".to_string(), AttributeValue::string("updated"));
 
-        let result = s.update_item(
-            "Table",
-            key,
-            "SET #value = :new",
-            None,
-            Some(&{
-                let mut names = HashMap::new();
-                names.insert("#value".to_string(), "value".to_string());
-                names
-            }),
-            Some(&values),
-            ReturnValues::AllOld,
-        ).unwrap().unwrap();
+        let result = s
+            .update_item(
+                "Table",
+                key,
+                "SET #value = :new",
+                None,
+                Some(&{
+                    let mut names = HashMap::new();
+                    names.insert("#value".to_string(), "value".to_string());
+                    names
+                }),
+                Some(&values),
+                ReturnValues::AllOld,
+            )
+            .unwrap()
+            .unwrap();
 
         // Should return old value
-        assert_eq!(result.get("value").unwrap().as_string().unwrap(), "original");
+        assert_eq!(
+            result.get("value").unwrap().as_string().unwrap(),
+            "original"
+        );
     }
 
     #[test]
@@ -675,7 +718,8 @@ mod update_item_tests {
             }),
             Some(&values),
             ReturnValues::None,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Item should now exist
         let result = s.get_item("Table", key, None, None).unwrap().unwrap();
@@ -701,13 +745,8 @@ mod condition_tests {
         ]);
 
         // Should succeed - item doesn't exist
-        s.put_item(
-            "Table",
-            item,
-            Some("attribute_not_exists(pk)"),
-            None,
-            None,
-        ).unwrap();
+        s.put_item("Table", item, Some("attribute_not_exists(pk)"), None, None)
+            .unwrap();
 
         let key = make_item(vec![("pk", AttributeValue::string("item1"))]);
         let result = s.get_item("Table", key, None, None).unwrap();
@@ -727,13 +766,7 @@ mod condition_tests {
         s.put_item("Table", item.clone(), None, None, None).unwrap();
 
         // Try to put again with condition - should fail
-        let result = s.put_item(
-            "Table",
-            item,
-            Some("attribute_not_exists(pk)"),
-            None,
-            None,
-        );
+        let result = s.put_item("Table", item, Some("attribute_not_exists(pk)"), None, None);
         assert!(matches!(result, Err(DynamoDBError::ConditionalCheckFailed)));
     }
 
@@ -754,13 +787,8 @@ mod condition_tests {
             ("pk", AttributeValue::string("item1")),
             ("version", AttributeValue::number("2")),
         ]);
-        s.put_item(
-            "Table",
-            new_item,
-            Some("attribute_exists(pk)"),
-            None,
-            None,
-        ).unwrap();
+        s.put_item("Table", new_item, Some("attribute_exists(pk)"), None, None)
+            .unwrap();
     }
 
     #[test]
@@ -806,7 +834,8 @@ mod condition_tests {
                 names
             }),
             Some(&values),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify deleted
         let result = s.get_item("Table", key, None, None).unwrap();
@@ -845,7 +874,8 @@ mod condition_tests {
             }),
             Some(&values),
             ReturnValues::None,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Try update with old version - should fail
         let result = s.update_item(
@@ -875,17 +905,20 @@ mod query_tests {
 
     fn setup_orders(s: &DynamoDBStorage) {
         composite_table(s, "Orders");
-        
+
         for i in 1..=10 {
             let item = make_item(vec![
                 ("pk", AttributeValue::string("customer1")),
                 ("sk", AttributeValue::string(format!("order#{:03}", i))),
                 ("amount", AttributeValue::number(format!("{}", i * 100))),
-                ("status", AttributeValue::string(if i % 2 == 0 { "shipped" } else { "pending" })),
+                (
+                    "status",
+                    AttributeValue::string(if i % 2 == 0 { "shipped" } else { "pending" }),
+                ),
             ]);
             s.put_item("Orders", item, None, None, None).unwrap();
         }
-        
+
         // Add orders for another customer
         for i in 1..=3 {
             let item = make_item(vec![
@@ -906,17 +939,19 @@ mod query_tests {
         let mut values = HashMap::new();
         values.insert(":pk".to_string(), AttributeValue::string("customer1"));
 
-        let result = s.query(
-            "Orders",
-            None,
-            "pk = :pk",
-            None,
-            None,
-            Some(&values),
-            true,
-            None,
-            None,
-        ).unwrap();
+        let result = s
+            .query(
+                "Orders",
+                None,
+                "pk = :pk",
+                None,
+                None,
+                Some(&values),
+                true,
+                None,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(result.items.len(), 10);
         assert_eq!(result.count, 10);
@@ -931,17 +966,19 @@ mod query_tests {
         values.insert(":pk".to_string(), AttributeValue::string("customer1"));
         values.insert(":sk".to_string(), AttributeValue::string("order#005"));
 
-        let result = s.query(
-            "Orders",
-            None,
-            "pk = :pk AND sk > :sk",
-            None,
-            None,
-            Some(&values),
-            true,
-            None,
-            None,
-        ).unwrap();
+        let result = s
+            .query(
+                "Orders",
+                None,
+                "pk = :pk AND sk > :sk",
+                None,
+                None,
+                Some(&values),
+                true,
+                None,
+                None,
+            )
+            .unwrap();
 
         // order#006 through order#010 = 5 items
         assert_eq!(result.items.len(), 5);
@@ -956,21 +993,23 @@ mod query_tests {
         values.insert(":pk".to_string(), AttributeValue::string("customer1"));
         values.insert(":status".to_string(), AttributeValue::string("shipped"));
 
-        let result = s.query(
-            "Orders",
-            None,
-            "pk = :pk",
-            Some("#status = :status"),
-            Some(&{
-                let mut names = HashMap::new();
-                names.insert("#status".to_string(), "status".to_string());
-                names
-            }),
-            Some(&values),
-            true,
-            None,
-            None,
-        ).unwrap();
+        let result = s
+            .query(
+                "Orders",
+                None,
+                "pk = :pk",
+                Some("#status = :status"),
+                Some(&{
+                    let mut names = HashMap::new();
+                    names.insert("#status".to_string(), "status".to_string());
+                    names
+                }),
+                Some(&values),
+                true,
+                None,
+                None,
+            )
+            .unwrap();
 
         // 5 shipped orders (even numbers)
         assert_eq!(result.items.len(), 5);
@@ -984,17 +1023,19 @@ mod query_tests {
         let mut values = HashMap::new();
         values.insert(":pk".to_string(), AttributeValue::string("customer1"));
 
-        let result = s.query(
-            "Orders",
-            None,
-            "pk = :pk",
-            None,
-            None,
-            Some(&values),
-            true,
-            Some(3),
-            None,
-        ).unwrap();
+        let result = s
+            .query(
+                "Orders",
+                None,
+                "pk = :pk",
+                None,
+                None,
+                Some(&values),
+                true,
+                Some(3),
+                None,
+            )
+            .unwrap();
 
         assert_eq!(result.items.len(), 3);
     }
@@ -1007,20 +1048,24 @@ mod query_tests {
         let mut values = HashMap::new();
         values.insert(":pk".to_string(), AttributeValue::string("customer1"));
 
-        let result = s.query(
-            "Orders",
-            None,
-            "pk = :pk",
-            None,
-            None,
-            Some(&values),
-            false, // reverse order
-            Some(3),
-            None,
-        ).unwrap();
+        let result = s
+            .query(
+                "Orders",
+                None,
+                "pk = :pk",
+                None,
+                None,
+                Some(&values),
+                false, // reverse order
+                Some(3),
+                None,
+            )
+            .unwrap();
 
         // Should get the last 3 items in reverse order
-        let sks: Vec<&str> = result.items.iter()
+        let sks: Vec<&str> = result
+            .items
+            .iter()
             .map(|i| i.get("sk").unwrap().as_string().unwrap())
             .collect();
         assert_eq!(sks, vec!["order#010", "order#009", "order#008"]);
@@ -1046,17 +1091,19 @@ mod query_tests {
         values.insert(":pk".to_string(), AttributeValue::string("user1"));
         values.insert(":prefix".to_string(), AttributeValue::string("doc"));
 
-        let result = s.query(
-            "Table",
-            None,
-            "pk = :pk AND begins_with(sk, :prefix)",
-            None,
-            None,
-            Some(&values),
-            true,
-            None,
-            None,
-        ).unwrap();
+        let result = s
+            .query(
+                "Table",
+                None,
+                "pk = :pk AND begins_with(sk, :prefix)",
+                None,
+                None,
+                Some(&values),
+                true,
+                None,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(result.items.len(), 3);
     }
@@ -1135,7 +1182,9 @@ mod scan_tests {
         let s = storage();
         setup_products(&s);
 
-        let result = s.scan("Products", None, None, None, None, None, None).unwrap();
+        let result = s
+            .scan("Products", None, None, None, None, None, None)
+            .unwrap();
         assert_eq!(result.items.len(), 5);
         assert_eq!(result.scanned_count, 5);
     }
@@ -1148,15 +1197,17 @@ mod scan_tests {
         let mut values = HashMap::new();
         values.insert(":cat".to_string(), AttributeValue::string("Electronics"));
 
-        let result = s.scan(
-            "Products",
-            None,
-            Some("category = :cat"),
-            None,
-            Some(&values),
-            None,
-            None,
-        ).unwrap();
+        let result = s
+            .scan(
+                "Products",
+                None,
+                Some("category = :cat"),
+                None,
+                Some(&values),
+                None,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(result.items.len(), 2);
         assert_eq!(result.scanned_count, 5);
@@ -1167,15 +1218,9 @@ mod scan_tests {
         let s = storage();
         setup_products(&s);
 
-        let result = s.scan(
-            "Products",
-            None,
-            None,
-            None,
-            None,
-            Some(2),
-            None,
-        ).unwrap();
+        let result = s
+            .scan("Products", None, None, None, None, Some(2), None)
+            .unwrap();
 
         assert_eq!(result.items.len(), 2);
     }
@@ -1188,15 +1233,17 @@ mod scan_tests {
         let mut values = HashMap::new();
         values.insert(":minprice".to_string(), AttributeValue::number("75"));
 
-        let result = s.scan(
-            "Products",
-            None,
-            Some("price >= :minprice"),
-            None,
-            Some(&values),
-            None,
-            None,
-        ).unwrap();
+        let result = s
+            .scan(
+                "Products",
+                None,
+                Some("price >= :minprice"),
+                None,
+                Some(&values),
+                None,
+                None,
+            )
+            .unwrap();
 
         // Products with price >= 75: prod2(75), prod3(100), prod4(125)
         assert_eq!(result.items.len(), 3);
@@ -1270,14 +1317,18 @@ mod gsi_tests {
                 },
             ]),
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Add users
         for i in 1..=5 {
             let dept = if i <= 3 { "Engineering" } else { "Marketing" };
             let item = make_item(vec![
                 ("userId", AttributeValue::string(format!("user{}", i))),
-                ("email", AttributeValue::string(format!("user{}@example.com", i))),
+                (
+                    "email",
+                    AttributeValue::string(format!("user{}@example.com", i)),
+                ),
                 ("name", AttributeValue::string(format!("User {}", i))),
                 ("department", AttributeValue::string(dept)),
             ]);
@@ -1291,22 +1342,30 @@ mod gsi_tests {
         setup_users_with_gsi(&s);
 
         let mut values = HashMap::new();
-        values.insert(":email".to_string(), AttributeValue::string("user3@example.com"));
+        values.insert(
+            ":email".to_string(),
+            AttributeValue::string("user3@example.com"),
+        );
 
-        let result = s.query(
-            "Users",
-            Some("email-index"),
-            "email = :email",
-            None,
-            None,
-            Some(&values),
-            true,
-            None,
-            None,
-        ).unwrap();
+        let result = s
+            .query(
+                "Users",
+                Some("email-index"),
+                "email = :email",
+                None,
+                None,
+                Some(&values),
+                true,
+                None,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(result.items.len(), 1);
-        assert_eq!(result.items[0].get("name").unwrap().as_string().unwrap(), "User 3");
+        assert_eq!(
+            result.items[0].get("name").unwrap().as_string().unwrap(),
+            "User 3"
+        );
     }
 
     #[test]
@@ -1317,17 +1376,19 @@ mod gsi_tests {
         let mut values = HashMap::new();
         values.insert(":dept".to_string(), AttributeValue::string("Engineering"));
 
-        let result = s.query(
-            "Users",
-            Some("department-index"),
-            "department = :dept",
-            None,
-            None,
-            Some(&values),
-            true,
-            None,
-            None,
-        ).unwrap();
+        let result = s
+            .query(
+                "Users",
+                Some("department-index"),
+                "department = :dept",
+                None,
+                None,
+                Some(&values),
+                true,
+                None,
+                None,
+            )
+            .unwrap();
 
         assert_eq!(result.items.len(), 3);
     }
@@ -1370,22 +1431,62 @@ mod attribute_value_tests {
 
         let item = make_item(vec![
             ("pk", AttributeValue::string("item1")),
-            ("string_attr", AttributeValue::S { S: "text".to_string() }),
-            ("number_attr", AttributeValue::N { N: "42.5".to_string() }),
-            ("binary_attr", AttributeValue::B { B: "YmluYXJ5IGRhdGE=".to_string() }), // "binary data" in base64
+            (
+                "string_attr",
+                AttributeValue::S {
+                    S: "text".to_string(),
+                },
+            ),
+            (
+                "number_attr",
+                AttributeValue::N {
+                    N: "42.5".to_string(),
+                },
+            ),
+            (
+                "binary_attr",
+                AttributeValue::B {
+                    B: "YmluYXJ5IGRhdGE=".to_string(),
+                },
+            ), // "binary data" in base64
             ("bool_attr", AttributeValue::BOOL { BOOL: true }),
             ("null_attr", AttributeValue::NULL { NULL: true }),
-            ("list_attr", AttributeValue::L { L: vec![
-                AttributeValue::S { S: "a".to_string() },
-                AttributeValue::N { N: "1".to_string() },
-            ]}),
-            ("map_attr", AttributeValue::M { M: {
-                let mut m = HashMap::new();
-                m.insert("nested".to_string(), AttributeValue::S { S: "value".to_string() });
-                m
-            }}),
-            ("string_set", AttributeValue::SS { SS: vec!["a".to_string(), "b".to_string()] }),
-            ("number_set", AttributeValue::NS { NS: vec!["1".to_string(), "2".to_string()] }),
+            (
+                "list_attr",
+                AttributeValue::L {
+                    L: vec![
+                        AttributeValue::S { S: "a".to_string() },
+                        AttributeValue::N { N: "1".to_string() },
+                    ],
+                },
+            ),
+            (
+                "map_attr",
+                AttributeValue::M {
+                    M: {
+                        let mut m = HashMap::new();
+                        m.insert(
+                            "nested".to_string(),
+                            AttributeValue::S {
+                                S: "value".to_string(),
+                            },
+                        );
+                        m
+                    },
+                },
+            ),
+            (
+                "string_set",
+                AttributeValue::SS {
+                    SS: vec!["a".to_string(), "b".to_string()],
+                },
+            ),
+            (
+                "number_set",
+                AttributeValue::NS {
+                    NS: vec!["1".to_string(), "2".to_string()],
+                },
+            ),
         ]);
 
         s.put_item("Table", item, None, None, None).unwrap();
@@ -1394,14 +1495,38 @@ mod attribute_value_tests {
         let result = s.get_item("Table", key, None, None).unwrap().unwrap();
 
         // Verify all types stored correctly
-        assert!(matches!(result.get("string_attr"), Some(AttributeValue::S { .. })));
-        assert!(matches!(result.get("number_attr"), Some(AttributeValue::N { .. })));
-        assert!(matches!(result.get("bool_attr"), Some(AttributeValue::BOOL { BOOL: true })));
-        assert!(matches!(result.get("null_attr"), Some(AttributeValue::NULL { NULL: true })));
-        assert!(matches!(result.get("list_attr"), Some(AttributeValue::L { .. })));
-        assert!(matches!(result.get("map_attr"), Some(AttributeValue::M { .. })));
-        assert!(matches!(result.get("string_set"), Some(AttributeValue::SS { .. })));
-        assert!(matches!(result.get("number_set"), Some(AttributeValue::NS { .. })));
+        assert!(matches!(
+            result.get("string_attr"),
+            Some(AttributeValue::S { .. })
+        ));
+        assert!(matches!(
+            result.get("number_attr"),
+            Some(AttributeValue::N { .. })
+        ));
+        assert!(matches!(
+            result.get("bool_attr"),
+            Some(AttributeValue::BOOL { BOOL: true })
+        ));
+        assert!(matches!(
+            result.get("null_attr"),
+            Some(AttributeValue::NULL { NULL: true })
+        ));
+        assert!(matches!(
+            result.get("list_attr"),
+            Some(AttributeValue::L { .. })
+        ));
+        assert!(matches!(
+            result.get("map_attr"),
+            Some(AttributeValue::M { .. })
+        ));
+        assert!(matches!(
+            result.get("string_set"),
+            Some(AttributeValue::SS { .. })
+        ));
+        assert!(matches!(
+            result.get("number_set"),
+            Some(AttributeValue::NS { .. })
+        ));
     }
 
     #[test]
@@ -1428,7 +1553,10 @@ mod attribute_value_tests {
 
         let item = make_item(vec![
             ("pk", AttributeValue::string("item1")),
-            ("big", AttributeValue::number("99999999999999999999999999999")),
+            (
+                "big",
+                AttributeValue::number("99999999999999999999999999999"),
+            ),
             ("negative", AttributeValue::number("-12345.6789")),
             ("scientific", AttributeValue::number("1.23e10")),
         ]);
@@ -1437,7 +1565,10 @@ mod attribute_value_tests {
 
         let key = make_item(vec![("pk", AttributeValue::string("item1"))]);
         let result = s.get_item("Table", key, None, None).unwrap().unwrap();
-        assert_eq!(result.get("big").unwrap().as_number().unwrap(), "99999999999999999999999999999");
+        assert_eq!(
+            result.get("big").unwrap().as_number().unwrap(),
+            "99999999999999999999999999999"
+        );
     }
 
     #[test]
@@ -1445,19 +1576,34 @@ mod attribute_value_tests {
         let s = storage();
         simple_table(&s, "Table");
 
-        let nested = AttributeValue::M { M: {
-            let mut m1 = HashMap::new();
-            m1.insert("level2".to_string(), AttributeValue::M { M: {
-                let mut m2 = HashMap::new();
-                m2.insert("level3".to_string(), AttributeValue::M { M: {
-                    let mut m3 = HashMap::new();
-                    m3.insert("value".to_string(), AttributeValue::string("deep"));
-                    m3
-                }});
-                m2
-            }});
-            m1
-        }};
+        let nested = AttributeValue::M {
+            M: {
+                let mut m1 = HashMap::new();
+                m1.insert(
+                    "level2".to_string(),
+                    AttributeValue::M {
+                        M: {
+                            let mut m2 = HashMap::new();
+                            m2.insert(
+                                "level3".to_string(),
+                                AttributeValue::M {
+                                    M: {
+                                        let mut m3 = HashMap::new();
+                                        m3.insert(
+                                            "value".to_string(),
+                                            AttributeValue::string("deep"),
+                                        );
+                                        m3
+                                    },
+                                },
+                            );
+                            m2
+                        },
+                    },
+                );
+                m1
+            },
+        };
 
         let item = make_item(vec![
             ("pk", AttributeValue::string("item1")),
@@ -1488,7 +1634,10 @@ mod attribute_value_tests {
 
         let key = make_item(vec![("pk", AttributeValue::string("item1"))]);
         let result = s.get_item("Table", key, None, None).unwrap().unwrap();
-        assert_eq!(result.get("japanese").unwrap().as_string().unwrap(), "こんにちは");
+        assert_eq!(
+            result.get("japanese").unwrap().as_string().unwrap(),
+            "こんにちは"
+        );
         assert_eq!(result.get("emoji").unwrap().as_string().unwrap(), "🎉🚀💻");
     }
 }
@@ -1504,8 +1653,14 @@ mod return_values_tests {
     fn test_return_values_from_str() {
         assert_eq!(ReturnValues::from_str("ALL_OLD"), ReturnValues::AllOld);
         assert_eq!(ReturnValues::from_str("ALL_NEW"), ReturnValues::AllNew);
-        assert_eq!(ReturnValues::from_str("UPDATED_OLD"), ReturnValues::UpdatedOld);
-        assert_eq!(ReturnValues::from_str("UPDATED_NEW"), ReturnValues::UpdatedNew);
+        assert_eq!(
+            ReturnValues::from_str("UPDATED_OLD"),
+            ReturnValues::UpdatedOld
+        );
+        assert_eq!(
+            ReturnValues::from_str("UPDATED_NEW"),
+            ReturnValues::UpdatedNew
+        );
         assert_eq!(ReturnValues::from_str("NONE"), ReturnValues::None);
         assert_eq!(ReturnValues::from_str("unknown"), ReturnValues::None);
         assert_eq!(ReturnValues::from_str("all_old"), ReturnValues::AllOld); // case insensitive

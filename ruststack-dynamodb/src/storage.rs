@@ -84,7 +84,10 @@ pub struct GlobalSecondaryIndex {
     pub key_schema: Vec<KeySchemaElement>,
     #[serde(rename = "Projection")]
     pub projection: Projection,
-    #[serde(rename = "ProvisionedThroughput", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "ProvisionedThroughput",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub provisioned_throughput: Option<ProvisionedThroughput>,
 }
 
@@ -192,36 +195,16 @@ pub type Item = HashMap<String, AttributeValue>;
 #[serde(untagged)]
 #[allow(non_snake_case)]
 pub enum AttributeValue {
-    S {
-        S: String,
-    },
-    N {
-        N: String,
-    },
-    B {
-        B: String,
-    },
-    BOOL {
-        BOOL: bool,
-    },
-    NULL {
-        NULL: bool,
-    },
-    L {
-        L: Vec<AttributeValue>,
-    },
-    M {
-        M: HashMap<String, AttributeValue>,
-    },
-    SS {
-        SS: Vec<String>,
-    },
-    NS {
-        NS: Vec<String>,
-    },
-    BS {
-        BS: Vec<String>,
-    },
+    S { S: String },
+    N { N: String },
+    B { B: String },
+    BOOL { BOOL: bool },
+    NULL { NULL: bool },
+    L { L: Vec<AttributeValue> },
+    M { M: HashMap<String, AttributeValue> },
+    SS { SS: Vec<String> },
+    NS { NS: Vec<String> },
+    BS { BS: Vec<String> },
 }
 
 impl AttributeValue {
@@ -563,7 +546,8 @@ impl DynamoDBStorage {
 
         // Check condition expression if provided
         if let Some(cond_expr) = condition_expression {
-            let ctx = ExpressionContext::new(expression_attribute_names, expression_attribute_values);
+            let ctx =
+                ExpressionContext::new(expression_attribute_names, expression_attribute_values);
             let condition = parse_condition(cond_expr)?;
 
             if let Some(cond) = condition {
@@ -633,7 +617,8 @@ impl DynamoDBStorage {
 
         // Check condition expression if provided
         if let Some(cond_expr) = condition_expression {
-            let ctx = ExpressionContext::new(expression_attribute_names, expression_attribute_values);
+            let ctx =
+                ExpressionContext::new(expression_attribute_names, expression_attribute_values);
             let condition = parse_condition(cond_expr)?;
 
             if let Some(cond) = condition {
@@ -798,9 +783,7 @@ impl DynamoDBStorage {
         // Filter by key conditions
         let mut filtered: Vec<Item> = items
             .into_iter()
-            .filter(|item| {
-                evaluate_key_conditions(&key_conditions, item, &ctx).unwrap_or(false)
-            })
+            .filter(|item| evaluate_key_conditions(&key_conditions, item, &ctx).unwrap_or(false))
             .collect();
 
         // Apply filter expression
@@ -1208,8 +1191,14 @@ mod tests {
         for i in 0..5 {
             let mut item = Item::new();
             item.insert("pk".to_string(), AttributeValue::string("user1"));
-            item.insert("sk".to_string(), AttributeValue::string(format!("order#{}", i)));
-            item.insert("amount".to_string(), AttributeValue::number(format!("{}", i * 10)));
+            item.insert(
+                "sk".to_string(),
+                AttributeValue::string(format!("order#{}", i)),
+            );
+            item.insert(
+                "amount".to_string(),
+                AttributeValue::number(format!("{}", i * 10)),
+            );
             storage
                 .put_item("TestTable", item, None, None, None)
                 .unwrap();
@@ -1244,12 +1233,14 @@ mod tests {
 
         for i in 0..5 {
             let mut item = Item::new();
-            item.insert("pk".to_string(), AttributeValue::string(format!("item{}", i)));
-            item.insert("status".to_string(), AttributeValue::string(if i % 2 == 0 {
-                "active"
-            } else {
-                "inactive"
-            }));
+            item.insert(
+                "pk".to_string(),
+                AttributeValue::string(format!("item{}", i)),
+            );
+            item.insert(
+                "status".to_string(),
+                AttributeValue::string(if i % 2 == 0 { "active" } else { "inactive" }),
+            );
             storage
                 .put_item("TestTable", item, None, None, None)
                 .unwrap();
@@ -1330,9 +1321,15 @@ mod tests {
         // Add items
         for i in 0..3 {
             let mut item = Item::new();
-            item.insert("pk".to_string(), AttributeValue::string(format!("item{}", i)));
+            item.insert(
+                "pk".to_string(),
+                AttributeValue::string(format!("item{}", i)),
+            );
             item.insert("gsi_pk".to_string(), AttributeValue::string("category1"));
-            item.insert("data".to_string(), AttributeValue::string(format!("data{}", i)));
+            item.insert(
+                "data".to_string(),
+                AttributeValue::string(format!("data{}", i)),
+            );
             storage
                 .put_item("TestTable", item, None, None, None)
                 .unwrap();

@@ -94,7 +94,10 @@ impl InvocationResult {
     pub fn unhandled_error(error: String, version: String) -> Self {
         Self {
             status_code: 200,
-            payload: Some(Bytes::from(format!(r#"{{"errorMessage":"{}","errorType":"Runtime.UnhandledError"}}"#, error))),
+            payload: Some(Bytes::from(format!(
+                r#"{{"errorMessage":"{}","errorType":"Runtime.UnhandledError"}}"#,
+                error
+            ))),
             function_error: Some("Unhandled".to_string()),
             log_result: None,
             executed_version: version,

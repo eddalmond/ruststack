@@ -70,7 +70,11 @@ impl LambdaService {
     }
 
     /// Extract zip code to the function's code directory
-    fn extract_code(&self, function_name: &str, zip_data: &[u8]) -> Result<PathBuf, LambdaServiceError> {
+    fn extract_code(
+        &self,
+        function_name: &str,
+        zip_data: &[u8],
+    ) -> Result<PathBuf, LambdaServiceError> {
         let code_path = self.function_code_path(function_name);
 
         // Remove old code if exists
@@ -424,7 +428,9 @@ except Exception as e:
             remaining_time = context.get_remaining_time_in_millis(),
             module = handler_module,
             handler = handler_function,
-            event_json = String::from_utf8_lossy(&payload).replace('\'', "\\'").replace('\n', "\\n"),
+            event_json = String::from_utf8_lossy(&payload)
+                .replace('\'', "\\'")
+                .replace('\n', "\\n"),
         );
 
         // Write wrapper script to temp file
@@ -445,17 +451,38 @@ except Exception as e:
 
         // Build environment variables
         let mut env_vars: HashMap<String, String> = function.config.environment.clone();
-        env_vars.insert("AWS_LAMBDA_FUNCTION_NAME".to_string(), function.config.function_name.clone());
-        env_vars.insert("AWS_LAMBDA_FUNCTION_VERSION".to_string(), function.version.clone());
-        env_vars.insert("AWS_LAMBDA_FUNCTION_MEMORY_SIZE".to_string(), function.config.memory_size.to_string());
-        env_vars.insert("AWS_LAMBDA_LOG_GROUP_NAME".to_string(), format!("/aws/lambda/{}", function.config.function_name));
-        env_vars.insert("AWS_LAMBDA_LOG_STREAM_NAME".to_string(), format!("2024/01/01/[$LATEST]{}", &request_id[..8]));
+        env_vars.insert(
+            "AWS_LAMBDA_FUNCTION_NAME".to_string(),
+            function.config.function_name.clone(),
+        );
+        env_vars.insert(
+            "AWS_LAMBDA_FUNCTION_VERSION".to_string(),
+            function.version.clone(),
+        );
+        env_vars.insert(
+            "AWS_LAMBDA_FUNCTION_MEMORY_SIZE".to_string(),
+            function.config.memory_size.to_string(),
+        );
+        env_vars.insert(
+            "AWS_LAMBDA_LOG_GROUP_NAME".to_string(),
+            format!("/aws/lambda/{}", function.config.function_name),
+        );
+        env_vars.insert(
+            "AWS_LAMBDA_LOG_STREAM_NAME".to_string(),
+            format!("2024/01/01/[$LATEST]{}", &request_id[..8]),
+        );
         env_vars.insert("AWS_REGION".to_string(), "us-east-1".to_string());
         env_vars.insert("AWS_DEFAULT_REGION".to_string(), "us-east-1".to_string());
         env_vars.insert("_HANDLER".to_string(), function.config.handler.clone());
-        env_vars.insert("LAMBDA_TASK_ROOT".to_string(), code_path.to_string_lossy().to_string());
+        env_vars.insert(
+            "LAMBDA_TASK_ROOT".to_string(),
+            code_path.to_string_lossy().to_string(),
+        );
         // Set LocalStack-compatible endpoint for S3/DynamoDB access
-        env_vars.insert("AWS_ENDPOINT_URL".to_string(), "http://localhost:4566".to_string());
+        env_vars.insert(
+            "AWS_ENDPOINT_URL".to_string(),
+            "http://localhost:4566".to_string(),
+        );
         env_vars.insert("LOCALSTACK_HOSTNAME".to_string(), "localhost".to_string());
 
         debug!(
@@ -514,10 +541,9 @@ except Exception as e:
                         status_code: 200,
                         payload: Some(Bytes::from(error_output)),
                         function_error: Some("Unhandled".to_string()),
-                        log_result: Some(general_purpose::STANDARD.encode(format!(
-                            "{}\n{}",
-                            stdout, stderr
-                        ))),
+                        log_result: Some(
+                            general_purpose::STANDARD.encode(format!("{}\n{}", stdout, stderr)),
+                        ),
                         executed_version: function.version.clone(),
                     })
                 }

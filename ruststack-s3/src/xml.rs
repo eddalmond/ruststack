@@ -4,7 +4,10 @@ use crate::storage::ListObjectsResult;
 
 /// Generate request ID (simplified)
 fn request_id() -> String {
-    uuid::Uuid::new_v4().to_string().replace("-", "").to_uppercase()
+    uuid::Uuid::new_v4()
+        .to_string()
+        .replace("-", "")
+        .to_uppercase()
 }
 
 /// Format an S3 error response as XML
@@ -14,7 +17,7 @@ pub fn format_error(code: &str, message: &str, resource: &str) -> String {
     } else {
         String::new()
     };
-    
+
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Error>
@@ -22,7 +25,10 @@ pub fn format_error(code: &str, message: &str, resource: &str) -> String {
   <Message>{}</Message>
 {}  <RequestId>{}</RequestId>
 </Error>"#,
-        code, message, resource_line, request_id()
+        code,
+        message,
+        resource_line,
+        request_id()
     )
 }
 

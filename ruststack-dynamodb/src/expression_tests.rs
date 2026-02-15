@@ -113,7 +113,9 @@ mod condition_parsing {
 
     #[test]
     fn test_attribute_not_exists() {
-        let cond = parse_condition("attribute_not_exists(deleted_at)").unwrap().unwrap();
+        let cond = parse_condition("attribute_not_exists(deleted_at)")
+            .unwrap()
+            .unwrap();
         match cond {
             ConditionOp::AttributeNotExists(path) => assert_eq!(path, "deleted_at"),
             _ => panic!("Expected AttributeNotExists"),
@@ -122,7 +124,9 @@ mod condition_parsing {
 
     #[test]
     fn test_begins_with() {
-        let cond = parse_condition("begins_with(sk, :prefix)").unwrap().unwrap();
+        let cond = parse_condition("begins_with(sk, :prefix)")
+            .unwrap()
+            .unwrap();
         match cond {
             ConditionOp::BeginsWith(path, value) => {
                 assert_eq!(path, "sk");
@@ -146,7 +150,9 @@ mod condition_parsing {
 
     #[test]
     fn test_and_condition() {
-        let cond = parse_condition("status = :active AND age > :min").unwrap().unwrap();
+        let cond = parse_condition("status = :active AND age > :min")
+            .unwrap()
+            .unwrap();
         match cond {
             ConditionOp::And(left, right) => {
                 assert!(matches!(*left, ConditionOp::Comparison { .. }));
@@ -158,7 +164,9 @@ mod condition_parsing {
 
     #[test]
     fn test_or_condition() {
-        let cond = parse_condition("status = :active OR status = :pending").unwrap().unwrap();
+        let cond = parse_condition("status = :active OR status = :pending")
+            .unwrap()
+            .unwrap();
         match cond {
             ConditionOp::Or(left, right) => {
                 assert!(matches!(*left, ConditionOp::Comparison { .. }));
@@ -170,7 +178,9 @@ mod condition_parsing {
 
     #[test]
     fn test_not_condition() {
-        let cond = parse_condition("NOT attribute_exists(deleted)").unwrap().unwrap();
+        let cond = parse_condition("NOT attribute_exists(deleted)")
+            .unwrap()
+            .unwrap();
         match cond {
             ConditionOp::Not(inner) => {
                 assert!(matches!(*inner, ConditionOp::AttributeExists(_)));
@@ -191,7 +201,9 @@ mod condition_parsing {
 
     #[test]
     fn test_in_operator() {
-        let cond = parse_condition("status IN (:s1, :s2, :s3)").unwrap().unwrap();
+        let cond = parse_condition("status IN (:s1, :s2, :s3)")
+            .unwrap()
+            .unwrap();
         match cond {
             ConditionOp::Comparison { op, values, .. } => {
                 assert_eq!(op, ComparisonOp::In);
@@ -214,7 +226,8 @@ mod update_expression_parsing {
 
     #[test]
     fn test_multiple_set() {
-        let update = parse_update_expression("SET name = :name, age = :age, status = :status").unwrap();
+        let update =
+            parse_update_expression("SET name = :name, age = :age, status = :status").unwrap();
         assert_eq!(update.set_actions.len(), 3);
     }
 
@@ -253,8 +266,9 @@ mod update_expression_parsing {
     #[test]
     fn test_all_clauses() {
         let update = parse_update_expression(
-            "SET name = :name REMOVE old ADD numbers :num DELETE tags :tag"
-        ).unwrap();
+            "SET name = :name REMOVE old ADD numbers :num DELETE tags :tag",
+        )
+        .unwrap();
         assert_eq!(update.set_actions.len(), 1);
         assert_eq!(update.remove_actions.len(), 1);
         assert_eq!(update.add_actions.len(), 1);
@@ -331,9 +345,7 @@ mod condition_evaluation {
 
     #[test]
     fn test_equality_match() {
-        let item = make_item(vec![
-            ("status", AttributeValue::string("active")),
-        ]);
+        let item = make_item(vec![("status", AttributeValue::string("active"))]);
         let mut values = HashMap::new();
         values.insert(":status".to_string(), AttributeValue::string("active"));
         let ctx = ExpressionContext::new(None, Some(&values));
@@ -344,9 +356,7 @@ mod condition_evaluation {
 
     #[test]
     fn test_equality_no_match() {
-        let item = make_item(vec![
-            ("status", AttributeValue::string("inactive")),
-        ]);
+        let item = make_item(vec![("status", AttributeValue::string("inactive"))]);
         let mut values = HashMap::new();
         values.insert(":status".to_string(), AttributeValue::string("active"));
         let ctx = ExpressionContext::new(None, Some(&values));
@@ -357,9 +367,7 @@ mod condition_evaluation {
 
     #[test]
     fn test_greater_than() {
-        let item = make_item(vec![
-            ("age", AttributeValue::number("30")),
-        ]);
+        let item = make_item(vec![("age", AttributeValue::number("30"))]);
         let mut values = HashMap::new();
         values.insert(":min".to_string(), AttributeValue::number("18"));
         let ctx = ExpressionContext::new(None, Some(&values));
@@ -370,9 +378,7 @@ mod condition_evaluation {
 
     #[test]
     fn test_less_than() {
-        let item = make_item(vec![
-            ("price", AttributeValue::number("50")),
-        ]);
+        let item = make_item(vec![("price", AttributeValue::number("50"))]);
         let mut values = HashMap::new();
         values.insert(":max".to_string(), AttributeValue::number("100"));
         let ctx = ExpressionContext::new(None, Some(&values));
@@ -383,9 +389,7 @@ mod condition_evaluation {
 
     #[test]
     fn test_attribute_exists_true() {
-        let item = make_item(vec![
-            ("email", AttributeValue::string("test@example.com")),
-        ]);
+        let item = make_item(vec![("email", AttributeValue::string("test@example.com"))]);
         let ctx = ExpressionContext::new(None, None);
 
         let cond = parse_condition("attribute_exists(email)").unwrap().unwrap();
@@ -394,9 +398,7 @@ mod condition_evaluation {
 
     #[test]
     fn test_attribute_exists_false() {
-        let item = make_item(vec![
-            ("name", AttributeValue::string("Test")),
-        ]);
+        let item = make_item(vec![("name", AttributeValue::string("Test"))]);
         let ctx = ExpressionContext::new(None, None);
 
         let cond = parse_condition("attribute_exists(email)").unwrap().unwrap();
@@ -405,51 +407,51 @@ mod condition_evaluation {
 
     #[test]
     fn test_attribute_not_exists_true() {
-        let item = make_item(vec![
-            ("name", AttributeValue::string("Test")),
-        ]);
+        let item = make_item(vec![("name", AttributeValue::string("Test"))]);
         let ctx = ExpressionContext::new(None, None);
 
-        let cond = parse_condition("attribute_not_exists(deleted_at)").unwrap().unwrap();
+        let cond = parse_condition("attribute_not_exists(deleted_at)")
+            .unwrap()
+            .unwrap();
         assert!(evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
     #[test]
     fn test_begins_with_match() {
-        let item = make_item(vec![
-            ("sk", AttributeValue::string("USER#123")),
-        ]);
+        let item = make_item(vec![("sk", AttributeValue::string("USER#123"))]);
         let mut values = HashMap::new();
         values.insert(":prefix".to_string(), AttributeValue::string("USER#"));
         let ctx = ExpressionContext::new(None, Some(&values));
 
-        let cond = parse_condition("begins_with(sk, :prefix)").unwrap().unwrap();
+        let cond = parse_condition("begins_with(sk, :prefix)")
+            .unwrap()
+            .unwrap();
         assert!(evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
     #[test]
     fn test_begins_with_no_match() {
-        let item = make_item(vec![
-            ("sk", AttributeValue::string("ORDER#123")),
-        ]);
+        let item = make_item(vec![("sk", AttributeValue::string("ORDER#123"))]);
         let mut values = HashMap::new();
         values.insert(":prefix".to_string(), AttributeValue::string("USER#"));
         let ctx = ExpressionContext::new(None, Some(&values));
 
-        let cond = parse_condition("begins_with(sk, :prefix)").unwrap().unwrap();
+        let cond = parse_condition("begins_with(sk, :prefix)")
+            .unwrap()
+            .unwrap();
         assert!(!evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
     #[test]
     fn test_contains_string() {
-        let item = make_item(vec![
-            ("description", AttributeValue::string("Hello World")),
-        ]);
+        let item = make_item(vec![("description", AttributeValue::string("Hello World"))]);
         let mut values = HashMap::new();
         values.insert(":search".to_string(), AttributeValue::string("World"));
         let ctx = ExpressionContext::new(None, Some(&values));
 
-        let cond = parse_condition("contains(description, :search)").unwrap().unwrap();
+        let cond = parse_condition("contains(description, :search)")
+            .unwrap()
+            .unwrap();
         assert!(evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
@@ -464,7 +466,9 @@ mod condition_evaluation {
         values.insert(":min".to_string(), AttributeValue::number("18"));
         let ctx = ExpressionContext::new(None, Some(&values));
 
-        let cond = parse_condition("status = :status AND age > :min").unwrap().unwrap();
+        let cond = parse_condition("status = :status AND age > :min")
+            .unwrap()
+            .unwrap();
         assert!(evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
@@ -479,32 +483,34 @@ mod condition_evaluation {
         values.insert(":min".to_string(), AttributeValue::number("18"));
         let ctx = ExpressionContext::new(None, Some(&values));
 
-        let cond = parse_condition("status = :status AND age > :min").unwrap().unwrap();
+        let cond = parse_condition("status = :status AND age > :min")
+            .unwrap()
+            .unwrap();
         assert!(!evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
     #[test]
     fn test_or_one_true() {
-        let item = make_item(vec![
-            ("status", AttributeValue::string("pending")),
-        ]);
+        let item = make_item(vec![("status", AttributeValue::string("pending"))]);
         let mut values = HashMap::new();
         values.insert(":active".to_string(), AttributeValue::string("active"));
         values.insert(":pending".to_string(), AttributeValue::string("pending"));
         let ctx = ExpressionContext::new(None, Some(&values));
 
-        let cond = parse_condition("status = :active OR status = :pending").unwrap().unwrap();
+        let cond = parse_condition("status = :active OR status = :pending")
+            .unwrap()
+            .unwrap();
         assert!(evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
     #[test]
     fn test_not() {
-        let item = make_item(vec![
-            ("name", AttributeValue::string("Test")),
-        ]);
+        let item = make_item(vec![("name", AttributeValue::string("Test"))]);
         let ctx = ExpressionContext::new(None, None);
 
-        let cond = parse_condition("NOT attribute_exists(deleted)").unwrap().unwrap();
+        let cond = parse_condition("NOT attribute_exists(deleted)")
+            .unwrap()
+            .unwrap();
         assert!(evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
@@ -512,39 +518,37 @@ mod condition_evaluation {
     fn test_between() {
         // BETWEEN is typically used in key conditions
         // Use greater than/less than comparisons for filter expressions
-        let item = make_item(vec![
-            ("price", AttributeValue::number("50")),
-        ]);
+        let item = make_item(vec![("price", AttributeValue::number("50"))]);
         let mut values = HashMap::new();
         values.insert(":min".to_string(), AttributeValue::number("10"));
         values.insert(":max".to_string(), AttributeValue::number("100"));
         let ctx = ExpressionContext::new(None, Some(&values));
 
         // Use compound condition instead of BETWEEN for filter
-        let cond = parse_condition("price >= :min AND price <= :max").unwrap().unwrap();
+        let cond = parse_condition("price >= :min AND price <= :max")
+            .unwrap()
+            .unwrap();
         assert!(evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
     #[test]
     fn test_between_out_of_range() {
-        let item = make_item(vec![
-            ("price", AttributeValue::number("150")),
-        ]);
+        let item = make_item(vec![("price", AttributeValue::number("150"))]);
         let mut values = HashMap::new();
         values.insert(":min".to_string(), AttributeValue::number("10"));
         values.insert(":max".to_string(), AttributeValue::number("100"));
         let ctx = ExpressionContext::new(None, Some(&values));
 
         // Use compound condition instead of BETWEEN for filter
-        let cond = parse_condition("price >= :min AND price <= :max").unwrap().unwrap();
+        let cond = parse_condition("price >= :min AND price <= :max")
+            .unwrap()
+            .unwrap();
         assert!(!evaluate_condition(&cond, &item, &ctx).unwrap());
     }
 
     #[test]
     fn test_attribute_name_resolution() {
-        let item = make_item(vec![
-            ("status", AttributeValue::string("active")),
-        ]);
+        let item = make_item(vec![("status", AttributeValue::string("active"))]);
         let mut names = HashMap::new();
         names.insert("#status".to_string(), "status".to_string());
         let mut values = HashMap::new();
@@ -565,9 +569,7 @@ mod update_application {
 
     #[test]
     fn test_set_new_attribute() {
-        let mut item = make_item(vec![
-            ("pk", AttributeValue::string("item1")),
-        ]);
+        let mut item = make_item(vec![("pk", AttributeValue::string("item1"))]);
         let mut values = HashMap::new();
         values.insert(":val".to_string(), AttributeValue::string("hello"));
         let ctx = ExpressionContext::new(None, Some(&values));
@@ -642,9 +644,7 @@ mod update_application {
 
     #[test]
     fn test_if_not_exists_uses_default() {
-        let mut item = make_item(vec![
-            ("pk", AttributeValue::string("item1")),
-        ]);
+        let mut item = make_item(vec![("pk", AttributeValue::string("item1"))]);
         let mut values = HashMap::new();
         values.insert(":default".to_string(), AttributeValue::number("0"));
         let ctx = ExpressionContext::new(None, Some(&values));
@@ -675,15 +675,20 @@ mod update_application {
     fn test_list_append() {
         let mut item = make_item(vec![
             ("pk", AttributeValue::string("item1")),
-            ("items", AttributeValue::L { L: vec![
-                AttributeValue::string("a"),
-                AttributeValue::string("b"),
-            ]}),
+            (
+                "items",
+                AttributeValue::L {
+                    L: vec![AttributeValue::string("a"), AttributeValue::string("b")],
+                },
+            ),
         ]);
         let mut values = HashMap::new();
-        values.insert(":new".to_string(), AttributeValue::L { L: vec![
-            AttributeValue::string("c"),
-        ]});
+        values.insert(
+            ":new".to_string(),
+            AttributeValue::L {
+                L: vec![AttributeValue::string("c")],
+            },
+        );
         let ctx = ExpressionContext::new(None, Some(&values));
 
         let update = parse_update_expression("SET items = list_append(items, :new)").unwrap();
@@ -717,10 +722,20 @@ mod update_application {
     fn test_add_to_string_set() {
         let mut item = make_item(vec![
             ("pk", AttributeValue::string("item1")),
-            ("tags", AttributeValue::SS { SS: vec!["tag1".to_string(), "tag2".to_string()] }),
+            (
+                "tags",
+                AttributeValue::SS {
+                    SS: vec!["tag1".to_string(), "tag2".to_string()],
+                },
+            ),
         ]);
         let mut values = HashMap::new();
-        values.insert(":newtags".to_string(), AttributeValue::SS { SS: vec!["tag3".to_string()] });
+        values.insert(
+            ":newtags".to_string(),
+            AttributeValue::SS {
+                SS: vec!["tag3".to_string()],
+            },
+        );
         let ctx = ExpressionContext::new(None, Some(&values));
 
         let update = parse_update_expression("ADD tags :newtags").unwrap();
@@ -736,9 +751,7 @@ mod update_application {
 
     #[test]
     fn test_multiple_set_actions() {
-        let mut item = make_item(vec![
-            ("pk", AttributeValue::string("item1")),
-        ]);
+        let mut item = make_item(vec![("pk", AttributeValue::string("item1"))]);
         let mut values = HashMap::new();
         values.insert(":name".to_string(), AttributeValue::string("Alice"));
         values.insert(":age".to_string(), AttributeValue::number("30"));

@@ -85,12 +85,12 @@ impl DynamoDBLocalServer {
             cmd.arg("-inMemory");
         }
 
-        cmd.stdout(Stdio::null())
-            .stderr(Stdio::null());
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
 
         info!(port = self.port, "Starting DynamoDB Local");
 
-        let child = cmd.spawn()
+        let child = cmd
+            .spawn()
             .map_err(|e| ServerError::StartFailed(e.to_string()))?;
 
         self.process = Some(child);

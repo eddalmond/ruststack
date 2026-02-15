@@ -31,11 +31,7 @@ async fn create_test_client(endpoint: &str) -> Client {
         .endpoint_url(endpoint)
         .region(aws_config::Region::new("us-east-1"))
         .credentials_provider(aws_credential_types::Credentials::new(
-            "test",
-            "test",
-            None,
-            None,
-            "test",
+            "test", "test", None, None, "test",
         ))
         .load()
         .await;
@@ -173,14 +169,8 @@ mod tests {
 
         assert!(result.item().is_some());
         let item = result.item().unwrap();
-        assert_eq!(
-            item.get("name").unwrap().as_s().unwrap(),
-            "Test Item"
-        );
-        assert_eq!(
-            item.get("price").unwrap().as_n().unwrap(),
-            "99.99"
-        );
+        assert_eq!(item.get("name").unwrap().as_s().unwrap(), "Test Item");
+        assert_eq!(item.get("price").unwrap().as_n().unwrap(), "99.99");
     }
 
     #[tokio::test]
@@ -425,7 +415,13 @@ mod tests {
             .unwrap();
 
         // Add products
-        let categories = ["Electronics", "Books", "Electronics", "Clothing", "Electronics"];
+        let categories = [
+            "Electronics",
+            "Books",
+            "Electronics",
+            "Clothing",
+            "Electronics",
+        ];
         for (i, cat) in categories.iter().enumerate() {
             client
                 .put_item()
@@ -658,10 +654,7 @@ mod tests {
 
         assert_eq!(result.count(), 1);
         let items = result.items();
-        assert_eq!(
-            items[0].get("name").unwrap().as_s().unwrap(),
-            "User 2"
-        );
+        assert_eq!(items[0].get("name").unwrap().as_s().unwrap(), "User 2");
     }
 
     #[tokio::test]

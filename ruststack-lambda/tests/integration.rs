@@ -21,11 +21,7 @@ async fn create_test_client(port: u16) -> Client {
     let config = aws_config::defaults(BehaviorVersion::latest())
         .endpoint_url(format!("http://localhost:{}", port))
         .credentials_provider(aws_sdk_lambda::config::Credentials::new(
-            "test",
-            "test",
-            None,
-            None,
-            "test",
+            "test", "test", None, None, "test",
         ))
         .region(aws_sdk_lambda::config::Region::new("us-east-1"))
         .load()
@@ -217,11 +213,19 @@ async fn test_create_function() {
         .runtime(Runtime::Python312)
         .role("arn:aws:iam::000000000000:role/lambda-role")
         .handler("handler.lambda_handler")
-        .code(FunctionCode::builder().zip_file(Blob::new(zip_data)).build())
+        .code(
+            FunctionCode::builder()
+                .zip_file(Blob::new(zip_data))
+                .build(),
+        )
         .send()
         .await;
 
-    assert!(result.is_ok(), "CreateFunction should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "CreateFunction should succeed: {:?}",
+        result
+    );
     let function = result.unwrap();
     assert_eq!(function.function_name(), Some("test-function"));
     assert_eq!(function.runtime(), Some(&Runtime::Python312));
@@ -241,7 +245,11 @@ async fn test_get_function() {
         .runtime(Runtime::Python312)
         .role("arn:aws:iam::000000000000:role/lambda-role")
         .handler("handler.lambda_handler")
-        .code(FunctionCode::builder().zip_file(Blob::new(zip_data)).build())
+        .code(
+            FunctionCode::builder()
+                .zip_file(Blob::new(zip_data))
+                .build(),
+        )
         .send()
         .await
         .unwrap();
@@ -269,7 +277,11 @@ async fn test_delete_function() {
         .runtime(Runtime::Python312)
         .role("arn:aws:iam::000000000000:role/lambda-role")
         .handler("handler.lambda_handler")
-        .code(FunctionCode::builder().zip_file(Blob::new(zip_data)).build())
+        .code(
+            FunctionCode::builder()
+                .zip_file(Blob::new(zip_data))
+                .build(),
+        )
         .send()
         .await
         .unwrap();
@@ -280,7 +292,11 @@ async fn test_delete_function() {
         .function_name("to-delete")
         .send()
         .await;
-    assert!(result.is_ok(), "DeleteFunction should succeed: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "DeleteFunction should succeed: {:?}",
+        result
+    );
 
     // Verify it's gone
     let get_result = client
@@ -288,7 +304,10 @@ async fn test_delete_function() {
         .function_name("to-delete")
         .send()
         .await;
-    assert!(get_result.is_err(), "Function should not exist after deletion");
+    assert!(
+        get_result.is_err(),
+        "Function should not exist after deletion"
+    );
 }
 
 #[tokio::test]
@@ -320,11 +339,7 @@ async fn test_list_functions() {
     let result = client.list_functions().send().await;
     assert!(result.is_ok(), "ListFunctions should succeed: {:?}", result);
     let response = result.unwrap();
-    assert_eq!(
-        response.functions().len(),
-        3,
-        "Should have 3 functions"
-    );
+    assert_eq!(response.functions().len(), 3, "Should have 3 functions");
 }
 
 #[tokio::test]
@@ -374,14 +389,15 @@ async fn test_duplicate_function() {
         .runtime(Runtime::Python312)
         .role("arn:aws:iam::000000000000:role/lambda-role")
         .handler("handler.lambda_handler")
-        .code(FunctionCode::builder().zip_file(Blob::new(zip_data)).build())
+        .code(
+            FunctionCode::builder()
+                .zip_file(Blob::new(zip_data))
+                .build(),
+        )
         .send()
         .await;
 
-    assert!(
-        result.is_err(),
-        "Creating duplicate function should fail"
-    );
+    assert!(result.is_err(), "Creating duplicate function should fail");
 }
 
 #[tokio::test]
@@ -398,7 +414,11 @@ async fn test_invoke_function_simple() {
         .runtime(Runtime::Python312)
         .role("arn:aws:iam::000000000000:role/lambda-role")
         .handler("handler.lambda_handler")
-        .code(FunctionCode::builder().zip_file(Blob::new(zip_data)).build())
+        .code(
+            FunctionCode::builder()
+                .zip_file(Blob::new(zip_data))
+                .build(),
+        )
         .send()
         .await
         .unwrap();
@@ -421,15 +441,18 @@ async fn test_invoke_function_simple() {
                 println!("Function error: {:?}", response.function_error());
             } else {
                 // Successful invocation
-                let payload = response.payload().map(|p| {
-                    String::from_utf8_lossy(p.as_ref()).to_string()
-                });
+                let payload = response
+                    .payload()
+                    .map(|p| String::from_utf8_lossy(p.as_ref()).to_string());
                 println!("Payload: {:?}", payload);
                 assert!(payload.is_some(), "Should have a payload");
             }
         }
         Err(e) => {
-            println!("Invoke failed (this may be expected if Python is not installed): {}", e);
+            println!(
+                "Invoke failed (this may be expected if Python is not installed): {}",
+                e
+            );
         }
     }
 }
@@ -448,7 +471,11 @@ async fn test_invoke_compute_function() {
         .runtime(Runtime::Python312)
         .role("arn:aws:iam::000000000000:role/lambda-role")
         .handler("compute.handler")
-        .code(FunctionCode::builder().zip_file(Blob::new(zip_data)).build())
+        .code(
+            FunctionCode::builder()
+                .zip_file(Blob::new(zip_data))
+                .build(),
+        )
         .send()
         .await
         .unwrap();
@@ -464,9 +491,9 @@ async fn test_invoke_compute_function() {
     match result {
         Ok(response) => {
             if response.function_error().is_none() {
-                let payload = response.payload().map(|p| {
-                    String::from_utf8_lossy(p.as_ref()).to_string()
-                });
+                let payload = response
+                    .payload()
+                    .map(|p| String::from_utf8_lossy(p.as_ref()).to_string());
                 if let Some(payload_str) = payload {
                     println!("Compute result: {}", payload_str);
                     // Parse and verify
@@ -496,7 +523,11 @@ async fn test_invoke_error_function() {
         .runtime(Runtime::Python312)
         .role("arn:aws:iam::000000000000:role/lambda-role")
         .handler("error.handler")
-        .code(FunctionCode::builder().zip_file(Blob::new(zip_data)).build())
+        .code(
+            FunctionCode::builder()
+                .zip_file(Blob::new(zip_data))
+                .build(),
+        )
         .send()
         .await
         .unwrap();
@@ -515,7 +546,10 @@ async fn test_invoke_error_function() {
             println!("Error response: {:?}", response);
             // Lambda returns 200 even for handled errors, check X-Amz-Function-Error header
             if response.function_error().is_some() {
-                println!("Function error correctly returned: {:?}", response.function_error());
+                println!(
+                    "Function error correctly returned: {:?}",
+                    response.function_error()
+                );
             }
         }
         Err(e) => {
@@ -574,7 +608,7 @@ def handler(event, context):
         .await;
 
     assert!(result.is_ok(), "Should create function with env vars");
-    
+
     let function = result.unwrap();
     let env = function.environment();
     assert!(env.is_some(), "Function should have environment");
