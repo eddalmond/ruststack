@@ -1,0 +1,28 @@
+[package]
+name = "ruststack-lambda"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lambda implementation for RustStack"
+
+[dependencies]
+ruststack-core = { path = "../ruststack-core" }
+
+tokio.workspace = true
+axum.workspace = true
+bytes.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+dashmap.workspace = true
+base64.workspace = true
+
+# Docker
+bollard.workspace = true
+
+[dev-dependencies]
+aws-sdk-lambda.workspace = true
+aws-config.workspace = true

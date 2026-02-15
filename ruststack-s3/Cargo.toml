@@ -1,0 +1,39 @@
+[package]
+name = "ruststack-s3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "S3 implementation for RustStack"
+
+[dependencies]
+ruststack-core = { path = "../ruststack-core" }
+ruststack-auth = { path = "../ruststack-auth" }
+
+tokio.workspace = true
+axum.workspace = true
+bytes.workspace = true
+futures.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+quick-xml.workspace = true
+
+thiserror.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+dashmap.workspace = true
+
+md-5.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+crc32fast.workspace = true
+hex.workspace = true
+base64.workspace = true
+
+# S3 framework
+s3s.workspace = true
+
+[dev-dependencies]
+aws-sdk-s3.workspace = true
+aws-config.workspace = true

@@ -1,0 +1,5 @@
+localstack-repo/
+s3s-repo/
+target/
+*.log
+.DS_Store

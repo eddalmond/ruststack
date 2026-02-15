@@ -1,0 +1,18 @@
+[package]
+name = "ruststack-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "AWS authentication for RustStack"
+
+[dependencies]
+ruststack-core = { path = "../ruststack-core" }
+thiserror.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+hex.workspace = true
+chrono.workspace = true
+percent-encoding.workspace = true
+url.workspace = true
+
+[dev-dependencies]
