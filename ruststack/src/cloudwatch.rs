@@ -9,11 +9,11 @@ use axum::{
     response::Response,
 };
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::debug;
 
 /// Shared state for CloudWatch Logs
 pub struct CloudWatchLogsState {
@@ -29,11 +29,12 @@ impl CloudWatchLogsState {
     }
 
     /// Store a log event (called by Lambda after invocation)
+    #[allow(dead_code)]
     pub fn put_log_event(&self, group_name: &str, stream_name: &str, message: String) {
         let timestamp = Utc::now().timestamp_millis();
 
         // Get or create log group
-        let mut group = self
+        let group = self
             .log_groups
             .entry(group_name.to_string())
             .or_insert_with(|| LogGroup {
@@ -100,6 +101,7 @@ pub struct LogEvent {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct DescribeLogGroupsRequest {
     log_group_name_prefix: Option<String>,
     limit: Option<i32>,
@@ -125,6 +127,7 @@ struct LogGroupInfo {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct DescribeLogStreamsRequest {
     log_group_name: String,
     log_stream_name_prefix: Option<String>,
@@ -159,6 +162,7 @@ struct LogStreamInfo {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct GetLogEventsRequest {
     log_group_name: String,
     log_stream_name: String,
@@ -200,6 +204,7 @@ struct CreateLogStreamRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct PutLogEventsRequest {
     log_group_name: String,
     log_stream_name: String,
@@ -236,7 +241,7 @@ pub async fn handle_logs_request(
         None => return error_response("MissingAction", "Missing x-amz-target header"),
     };
 
-    let action = target.split('.').last().unwrap_or(target);
+    let action = target.split('.').next_back().unwrap_or(target);
     debug!(action = %action, "CloudWatch Logs request");
 
     // Parse body

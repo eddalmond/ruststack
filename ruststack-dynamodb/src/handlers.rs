@@ -38,7 +38,7 @@ pub async fn handle_request(
     };
 
     // Parse action from target (format: DynamoDB_20120810.ActionName)
-    let action = target.split('.').last().unwrap_or(target);
+    let action = target.split('.').next_back().unwrap_or(target);
 
     // Parse request body as JSON
     let body_json: Value = match serde_json::from_slice(&body) {
@@ -84,7 +84,7 @@ fn handle_create_table(storage: &DynamoDBStorage, body: &Value) -> Result<Value,
         .as_array()
         .ok_or_else(|| DynamoDBError::ValidationError("Missing KeySchema".to_string()))?
         .iter()
-        .map(|k| parse_key_schema_element(k))
+        .map(parse_key_schema_element)
         .collect::<Result<Vec<_>, _>>()?;
 
     // Parse attribute definitions
@@ -92,7 +92,7 @@ fn handle_create_table(storage: &DynamoDBStorage, body: &Value) -> Result<Value,
         .as_array()
         .ok_or_else(|| DynamoDBError::ValidationError("Missing AttributeDefinitions".to_string()))?
         .iter()
-        .map(|a| parse_attribute_definition(a))
+        .map(parse_attribute_definition)
         .collect::<Result<Vec<_>, _>>()?;
 
     // Parse provisioned throughput (or use defaults for on-demand)
@@ -104,7 +104,7 @@ fn handle_create_table(storage: &DynamoDBStorage, body: &Value) -> Result<Value,
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .map(|gsi| parse_gsi(gsi))
+                .map(parse_gsi)
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
@@ -115,7 +115,7 @@ fn handle_create_table(storage: &DynamoDBStorage, body: &Value) -> Result<Value,
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .map(|lsi| parse_lsi(lsi))
+                .map(parse_lsi)
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
@@ -348,7 +348,7 @@ fn handle_query(storage: &DynamoDBStorage, body: &Value) -> Result<Value, Dynamo
     let exclusive_start_key = body
         .get("ExclusiveStartKey")
         .filter(|v| !v.is_null())
-        .map(|v| parse_item(v))
+        .map(parse_item)
         .transpose()?;
 
     let result = storage.query(
@@ -394,7 +394,7 @@ fn handle_scan(storage: &DynamoDBStorage, body: &Value) -> Result<Value, DynamoD
     let exclusive_start_key = body
         .get("ExclusiveStartKey")
         .filter(|v| !v.is_null())
-        .map(|v| parse_item(v))
+        .map(parse_item)
         .transpose()?;
 
     let result = storage.scan(
@@ -429,7 +429,7 @@ fn handle_batch_get_item(storage: &DynamoDBStorage, body: &Value) -> Result<Valu
         .ok_or_else(|| DynamoDBError::ValidationError("Missing RequestItems".to_string()))?;
 
     let mut responses: HashMap<String, Vec<Item>> = HashMap::new();
-    let mut unprocessed: HashMap<String, Value> = HashMap::new();
+    let unprocessed: HashMap<String, Value> = HashMap::new();
 
     for (table_name, request) in request_items {
         let keys = request
@@ -464,7 +464,7 @@ fn handle_batch_write_item(
         .and_then(|v| v.as_object())
         .ok_or_else(|| DynamoDBError::ValidationError("Missing RequestItems".to_string()))?;
 
-    let mut unprocessed: HashMap<String, Value> = HashMap::new();
+    let unprocessed: HashMap<String, Value> = HashMap::new();
 
     for (table_name, requests) in request_items {
         let operations = requests
@@ -573,7 +573,7 @@ fn parse_gsi(value: &Value) -> Result<GlobalSecondaryIndex, DynamoDBError> {
         .as_array()
         .ok_or_else(|| DynamoDBError::ValidationError("Missing KeySchema in GSI".to_string()))?
         .iter()
-        .map(|k| parse_key_schema_element(k))
+        .map(parse_key_schema_element)
         .collect::<Result<Vec<_>, _>>()?;
 
     let projection = parse_projection(&value["Projection"])?;
@@ -600,7 +600,7 @@ fn parse_lsi(value: &Value) -> Result<LocalSecondaryIndex, DynamoDBError> {
         .as_array()
         .ok_or_else(|| DynamoDBError::ValidationError("Missing KeySchema in LSI".to_string()))?
         .iter()
-        .map(|k| parse_key_schema_element(k))
+        .map(parse_key_schema_element)
         .collect::<Result<Vec<_>, _>>()?;
 
     let projection = parse_projection(&value["Projection"])?;

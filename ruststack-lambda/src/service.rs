@@ -244,6 +244,7 @@ impl LambdaService {
     }
 
     /// Update function configuration
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_function_configuration(
         &self,
         function_name: &str,

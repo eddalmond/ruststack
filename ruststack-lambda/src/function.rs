@@ -42,6 +42,7 @@ impl Runtime {
     }
 
     /// Parse runtime string
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "python3.9" => Some(Self::Python39),

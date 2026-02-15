@@ -19,6 +19,7 @@ struct InMemoryObject {
 }
 
 /// In-memory bucket
+#[allow(dead_code)]
 struct InMemoryBucket {
     objects: DashMap<String, InMemoryObject>,
     multipart_uploads: DashMap<String, MultipartUpload>,
@@ -36,6 +37,7 @@ impl InMemoryBucket {
 }
 
 /// In-progress multipart upload
+#[allow(dead_code)]
 struct MultipartUpload {
     key: String,
     parts: HashMap<i32, InMemoryPart>,
@@ -44,6 +46,7 @@ struct MultipartUpload {
 }
 
 /// Uploaded part
+#[allow(dead_code)]
 struct InMemoryPart {
     data: Bytes,
     etag: String,

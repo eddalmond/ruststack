@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 /// Main configuration structure
 #[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
 pub struct Config {
     #[serde(default)]
     pub server: ServerConfig,
@@ -17,6 +18,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ServerConfig {
     #[serde(default = "default_port")]
     pub port: u16,
@@ -35,6 +37,7 @@ impl Default for ServerConfig {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
 pub struct ServicesConfig {
     #[serde(default = "default_true")]
     pub s3: bool,
@@ -46,21 +49,19 @@ pub struct ServicesConfig {
     pub lambda: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
 #[serde(tag = "type")]
 pub enum StorageConfig {
     #[serde(rename = "ephemeral")]
+    #[default]
     Ephemeral,
 
     #[serde(rename = "filesystem")]
     FileSystem { path: PathBuf },
 }
 
-impl Default for StorageConfig {
-    fn default() -> Self {
-        Self::Ephemeral
-    }
-}
+// Default derived via #[default] attribute above
 
 fn default_port() -> u16 {
     4566

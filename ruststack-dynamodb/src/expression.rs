@@ -400,13 +400,13 @@ fn split_update_clauses(expr: &str) -> Vec<(String, String)> {
     let mut clauses = Vec::new();
     let keywords = ["SET", "REMOVE", "ADD", "DELETE"];
 
-    let upper = expr.to_uppercase();
+    let _upper = expr.to_uppercase();
     let mut positions: Vec<(usize, &str)> = keywords
         .iter()
         .filter_map(|&kw| {
             // Find keyword at word boundary
             let re = regex_lite::Regex::new(&format!(r"(?i)\b{}\s", kw)).unwrap();
-            re.find(&expr).map(|m| (m.start(), kw))
+            re.find(expr).map(|m| (m.start(), kw))
         })
         .collect();
 
@@ -511,7 +511,7 @@ fn parse_update_value(expr: &str) -> Result<UpdateValue, ExpressionError> {
 
     // if_not_exists(path, value)
     if let Some(inner) = extract_function_args(expr, "if_not_exists") {
-        let parts: Vec<&str> = split_function_args(&inner);
+        let parts: Vec<&str> = split_function_args(inner);
         if parts.len() != 2 {
             return Err(ExpressionError::Invalid(
                 "if_not_exists requires 2 arguments".to_string(),
@@ -525,7 +525,7 @@ fn parse_update_value(expr: &str) -> Result<UpdateValue, ExpressionError> {
 
     // list_append(list1, list2)
     if let Some(inner) = extract_function_args(expr, "list_append") {
-        let parts: Vec<&str> = split_function_args(&inner);
+        let parts: Vec<&str> = split_function_args(inner);
         if parts.len() != 2 {
             return Err(ExpressionError::Invalid(
                 "list_append requires 2 arguments".to_string(),
@@ -721,7 +721,7 @@ pub fn evaluate_condition(
             }
             Ok(false)
         }
-        ConditionOp::Size(path) => {
+        ConditionOp::Size(_path) => {
             // Size returns a number for comparison - this needs special handling
             // in the comparison that wraps it. For now, we can't evaluate standalone.
             Err(ExpressionError::Invalid(
@@ -935,7 +935,7 @@ fn evaluate_update_value(
             let resolved_path = ctx.resolve_name(path)?;
             get_nested_attribute(item, &resolved_path)
                 .cloned()
-                .ok_or_else(|| ExpressionError::MissingAttributeValue(resolved_path))
+                .ok_or(ExpressionError::MissingAttributeValue(resolved_path))
         }
         UpdateValue::IfNotExists(path, default) => {
             let resolved_path = ctx.resolve_name(path)?;
@@ -1010,10 +1010,10 @@ fn split_by_and(expr: &str) -> Vec<&str> {
             depth -= 1;
         } else if depth == 0 {
             // Check for BETWEEN keyword
-            if i + 7 <= upper.len() && &upper[i..i + 7] == "BETWEEN" {
-                if i == 0 || !bytes[i - 1].is_ascii_alphanumeric() {
-                    in_between = true;
-                }
+            if i + 7 <= upper.len() && &upper[i..i + 7] == "BETWEEN"
+                && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
+            {
+                in_between = true;
             }
 
             // Check for AND keyword
@@ -1043,7 +1043,7 @@ fn split_by_and(expr: &str) -> Vec<&str> {
 
 fn split_by_operator<'a>(expr: &'a str, op: &str) -> Option<(&'a str, &'a str)> {
     let upper = expr.to_uppercase();
-    let op_upper = format!(" {} ", op.to_uppercase());
+    let _op_upper = format!(" {} ", op.to_uppercase());
     let bytes = expr.as_bytes();
     let mut depth = 0;
 
@@ -1054,10 +1054,10 @@ fn split_by_operator<'a>(expr: &'a str, op: &str) -> Option<(&'a str, &'a str)> 
         } else if bytes[i] == b')' {
             depth -= 1;
         } else if depth == 0 && i + op.len() + 2 <= upper.len() {
-            let check = format!(" {} ", &upper[i..i + op.len()]);
+            let _check = format!(" {} ", &upper[i..i + op.len()]);
             if i > 0
                 && bytes[i - 1] == b' '
-                && &upper[i..i + op.len()] == op.to_uppercase()
+                && upper[i..i + op.len()] == op.to_uppercase()
                 && i + op.len() < expr.len()
                 && bytes[i + op.len()] == b' '
             {
@@ -1212,7 +1212,7 @@ fn set_nested_attribute(item: &mut Item, path: &str, value: AttributeValue) {
     }
 
     let mut current = item.get_mut(first);
-    for (i, part) in parts[1..parts.len() - 1].iter().enumerate() {
+    for part in parts[1..parts.len() - 1].iter() {
         match current {
             Some(AttributeValue::M { M: map }) => {
                 if !map.contains_key(*part) {

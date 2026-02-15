@@ -3,15 +3,15 @@
 use axum::{
     body::Body,
     extract::{Path, Query, State},
-    http::{header, HeaderMap, Method, Request, StatusCode},
-    response::{IntoResponse, Response},
+    http::{header, HeaderMap, Method, StatusCode},
+    response::Response,
 };
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::storage::{ObjectMetadata, ObjectStorage, StorageError};
-use crate::xml::{format_error, format_list_buckets, format_list_objects, format_object_result};
+use crate::xml::{format_error, format_list_buckets, format_list_objects};
 
 /// Shared state for S3 handlers
 pub struct S3State {
@@ -38,7 +38,7 @@ pub async fn handle_bucket(
     method: Method,
     Query(query): Query<ListObjectsQuery>,
     headers: HeaderMap,
-    body: Bytes,
+    _body: Bytes,
 ) -> Response {
     match method {
         Method::PUT => create_bucket(state, &bucket, headers).await,
@@ -201,7 +201,7 @@ async fn put_object(
     }
 }
 
-async fn get_object(state: Arc<S3State>, bucket: &str, key: &str, headers: HeaderMap) -> Response {
+async fn get_object(state: Arc<S3State>, bucket: &str, key: &str, _headers: HeaderMap) -> Response {
     match state.storage.get_object(bucket, key, None).await {
         Ok(obj) => {
             let mut builder = Response::builder()

@@ -234,6 +234,7 @@ impl AttributeValue {
 }
 
 /// Secondary index storage
+#[allow(dead_code)]
 struct SecondaryIndex {
     key_schema: Vec<KeySchemaElement>,
     projection: Projection,
@@ -274,7 +275,7 @@ impl SecondaryIndex {
         if let Some(index_key) = self.get_index_key(item) {
             self.items
                 .entry(index_key)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(primary_key.to_string());
         }
     }
@@ -369,6 +370,7 @@ impl Table {
     }
 
     /// Get the hash key attribute name
+    #[allow(dead_code)]
     fn hash_key_name(&self) -> &str {
         self.description
             .key_schema
@@ -391,20 +393,20 @@ impl Table {
     fn update_indexes(&self, old_item: Option<&Item>, new_item: Option<&Item>, primary_key: &str) {
         // Remove old item from indexes
         if let Some(old) = old_item {
-            for (_, index) in &self.global_secondary_indexes {
+            for index in self.global_secondary_indexes.values() {
                 index.remove_item(old, primary_key);
             }
-            for (_, index) in &self.local_secondary_indexes {
+            for index in self.local_secondary_indexes.values() {
                 index.remove_item(old, primary_key);
             }
         }
 
         // Add new item to indexes
         if let Some(new) = new_item {
-            for (_, index) in &self.global_secondary_indexes {
+            for index in self.global_secondary_indexes.values() {
                 index.add_item(new, primary_key);
             }
-            for (_, index) in &self.local_secondary_indexes {
+            for index in self.local_secondary_indexes.values() {
                 index.add_item(new, primary_key);
             }
         }
@@ -580,7 +582,7 @@ impl DynamoDBStorage {
         table_name: &str,
         key: Item,
         projection_expression: Option<&str>,
-        expression_attribute_names: Option<&HashMap<String, String>>,
+        _expression_attribute_names: Option<&HashMap<String, String>>,
     ) -> Result<Option<Item>, DynamoDBError> {
         let table = self
             .tables
@@ -591,7 +593,7 @@ impl DynamoDBStorage {
         let item = table.items.get(&key_str).map(|r| r.clone());
 
         // Apply projection if specified
-        if let (Some(item), Some(_proj)) = (&item, projection_expression) {
+        if let (Some(_item), Some(_proj)) = (&item, projection_expression) {
             // TODO: Implement projection expression
             // For now, return full item
         }
@@ -644,6 +646,7 @@ impl DynamoDBStorage {
     }
 
     /// Update an item
+    #[allow(clippy::too_many_arguments)]
     pub fn update_item(
         &self,
         table_name: &str,
@@ -726,6 +729,7 @@ impl DynamoDBStorage {
     }
 
     /// Query items
+    #[allow(clippy::too_many_arguments)]
     pub fn query(
         &self,
         table_name: &str,
@@ -750,7 +754,7 @@ impl DynamoDBStorage {
 
         // Parse filter expression
         let filter = filter_expression
-            .map(|f| parse_condition(f))
+            .map(parse_condition)
             .transpose()?
             .flatten();
 
@@ -843,6 +847,7 @@ impl DynamoDBStorage {
     }
 
     /// Scan all items in a table
+    #[allow(clippy::too_many_arguments)]
     pub fn scan(
         &self,
         table_name: &str,
@@ -862,7 +867,7 @@ impl DynamoDBStorage {
 
         // Parse filter expression
         let filter = filter_expression
-            .map(|f| parse_condition(f))
+            .map(parse_condition)
             .transpose()?
             .flatten();
 
@@ -912,7 +917,7 @@ impl DynamoDBStorage {
         items = items.into_iter().skip(start_pos).collect();
 
         // Apply limit
-        let count = items.len();
+        let _count = items.len();
         let (items, last_evaluated_key) = if let Some(lim) = limit {
             if items.len() > lim {
                 let last = items.get(lim - 1).cloned();
@@ -945,6 +950,7 @@ pub enum ReturnValues {
 }
 
 impl ReturnValues {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "ALL_OLD" => ReturnValues::AllOld,
