@@ -1,5 +1,8 @@
 # RustStack
 
+[![CI](https://github.com/eddalmond/ruststack/actions/workflows/ci.yml/badge.svg)](https://github.com/eddalmond/ruststack/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+
 A high-fidelity AWS local emulator written in Rust. Drop-in replacement for LocalStack for integration testing Flask/Lambda applications.
 
 ## Features
