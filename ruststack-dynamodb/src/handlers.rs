@@ -102,22 +102,14 @@ fn handle_create_table(storage: &DynamoDBStorage, body: &Value) -> Result<Value,
     let global_secondary_indexes = body
         .get("GlobalSecondaryIndexes")
         .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .map(parse_gsi)
-                .collect::<Result<Vec<_>, _>>()
-        })
+        .map(|arr| arr.iter().map(parse_gsi).collect::<Result<Vec<_>, _>>())
         .transpose()?;
 
     // Parse LSIs
     let local_secondary_indexes = body
         .get("LocalSecondaryIndexes")
         .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .map(parse_lsi)
-                .collect::<Result<Vec<_>, _>>()
-        })
+        .map(|arr| arr.iter().map(parse_lsi).collect::<Result<Vec<_>, _>>())
         .transpose()?;
 
     let description = storage.create_table(

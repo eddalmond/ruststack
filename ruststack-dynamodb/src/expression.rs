@@ -1010,7 +1010,8 @@ fn split_by_and(expr: &str) -> Vec<&str> {
             depth -= 1;
         } else if depth == 0 {
             // Check for BETWEEN keyword
-            if i + 7 <= upper.len() && &upper[i..i + 7] == "BETWEEN"
+            if i + 7 <= upper.len()
+                && &upper[i..i + 7] == "BETWEEN"
                 && (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
             {
                 in_between = true;
