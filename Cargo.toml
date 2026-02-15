@@ -72,14 +72,17 @@ clap = { version = "4.4", features = ["derive", "env"] }
 config = "0.14"
 toml = "0.8"
 
-# S3 framework
-s3s = "0.10"
+# S3 framework (not using - implementing natively with axum)
+# s3s = "0.10"
+
+# Async trait
+async-trait = "0.1"
 
 # Docker (for Lambda)
 bollard = "0.16"
 
 # HTTP client (for DynamoDB proxy)
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 
 # Testing
 aws-config = "1.1"

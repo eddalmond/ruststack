@@ -83,6 +83,6 @@ impl Config {
             .add_source(config::Environment::with_prefix("RUSTSTACK"))
             .build()?;
 
-        Ok(config.try_deserialize()?)
+        Ok(config.try_deserialize::<Config>()?)
     }
 }

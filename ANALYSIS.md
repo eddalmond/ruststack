@@ -2,529 +2,464 @@
 
 ## Executive Summary
 
-This document analyzes LocalStack's implementation of AWS services (S3, DynamoDB, Lambda) to inform the design of RustStack - a high-fidelity Rust-based AWS local emulator.
+This document analyzes LocalStack's implementation of AWS services (S3, DynamoDB, Lambda) to inform the design of RustStack - a high-fidelity AWS local emulator focused on **integration testing for Flask/Lambda applications**.
 
-## 1. LocalStack Architecture Overview
+### Target Use Case
 
-### Core Design Patterns
+A Flask application running as AWS Lambda, fronted by API Gateway, using:
+- **S3** for file storage
+- **DynamoDB** for data persistence
+- **Lambda** for compute
 
-LocalStack uses a **provider-based architecture** where each AWS service is implemented as a Python class that:
-1. Inherits from an auto-generated API interface (from AWS Smithy models)
-2. Uses handler decorators to map operations
-3. Maintains state through `BaseStore` classes
-4. Supports cross-account and cross-region attributes
-
-**Key Files:**
-- `localstack/aws/api/` - Auto-generated API types from Smithy
-- `localstack/services/*/provider.py` - Service implementations
-- `localstack/services/*/models.py` - Data models and state stores
-- `localstack/services/stores.py` - Base store infrastructure
-
-### State Management
-
-LocalStack uses `AccountRegionBundle` for multi-tenant state:
-```python
-dynamodb_stores = AccountRegionBundle("dynamodb", DynamoDBStore)
-```
-
-Key store types:
-- `LocalAttribute` - Region-scoped data
-- `CrossRegionAttribute` - Account-wide data
-- `CrossAccountAttribute` - Global data
+RustStack prioritizes **depth over breadth** - bulletproof core operations rather than broad but shallow coverage.
 
 ---
 
-## 2. S3 Implementation Analysis
+## 1. Priority Operations
 
-### File Structure
-```
-localstack/services/s3/
-├── provider.py      (201KB) - Main S3 API implementation
-├── models.py        (31KB)  - S3Bucket, S3Object, KeyStore, etc.
-├── storage/
-│   ├── core.py      (7KB)   - Abstract storage interface
-│   └── ephemeral.py (18KB)  - In-memory storage implementation
-├── notifications.py (32KB)  - Event notification handling
-├── presigned_url.py (38KB)  - Presigned URL generation/validation
-├── cors.py          (13KB)  - CORS handling
-├── utils.py         (44KB)  - Utilities (checksums, ETags, etc.)
-├── validation.py    (20KB)  - Input validation
-└── website_hosting.py (16KB) - Static website hosting
-```
+### S3 (High Fidelity Required)
 
-### API Operations Implemented (~95 operations)
+| Operation | Priority | Notes |
+|-----------|----------|-------|
+| GetObject | **P0** | Range requests, conditional gets |
+| PutObject | **P0** | Streaming upload, Content-MD5 |
+| DeleteObject | **P0** | Simple delete (no versioning) |
+| HeadObject | **P0** | Metadata retrieval |
+| ListObjectsV2 | **P0** | Pagination, prefix filtering |
+| CreateBucket | P1 | Basic creation |
+| DeleteBucket | P1 | Empty bucket only |
+| HeadBucket | P1 | Existence check |
 
-**Bucket Operations:**
-- CreateBucket, DeleteBucket, ListBuckets, HeadBucket
-- GetBucketLocation, GetBucketVersioning, PutBucketVersioning
-- GetBucketEncryption, PutBucketEncryption, DeleteBucketEncryption
-- GetBucketNotificationConfiguration, PutBucketNotificationConfiguration
-- GetBucketTagging, PutBucketTagging, DeleteBucketTagging
-- GetBucketCors, PutBucketCors, DeleteBucketCors
-- GetBucketLifecycleConfiguration, PutBucketLifecycleConfiguration
-- GetBucketPolicy, PutBucketPolicy, DeleteBucketPolicy
-- GetBucketAcl, PutBucketAcl
-- GetBucketWebsite, PutBucketWebsite, DeleteBucketWebsite
-- GetBucketLogging, PutBucketLogging
-- GetBucketReplication, PutBucketReplication, DeleteBucketReplication
-- GetPublicAccessBlock, PutPublicAccessBlock, DeletePublicAccessBlock
-- GetBucketOwnershipControls, PutBucketOwnershipControls
-- GetBucketAccelerateConfiguration, PutBucketAccelerateConfiguration
-- GetBucketRequestPayment, PutBucketRequestPayment
-- Analytics, Inventory, Metrics, IntelligentTiering configurations
+**Error codes that must match AWS exactly:**
+- `NoSuchKey` (404) - Object doesn't exist
+- `NoSuchBucket` (404) - Bucket doesn't exist
+- `BucketAlreadyExists` (409) - Bucket name taken
+- `BucketNotEmpty` (409) - Delete non-empty bucket
+- `InvalidArgument` (400) - Bad request parameters
+- `AccessDenied` (403) - Permission denied
 
-**Object Operations:**
-- PutObject, GetObject, HeadObject, DeleteObject, DeleteObjects
-- CopyObject
-- GetObjectAttributes
-- RestoreObject (partial)
-- GetObjectAcl, PutObjectAcl
-- GetObjectTagging, PutObjectTagging, DeleteObjectTagging
-- GetObjectLockConfiguration, PutObjectLockConfiguration
-- GetObjectLegalHold, PutObjectLegalHold
-- GetObjectRetention, PutObjectRetention
+### DynamoDB (High Fidelity Required)
 
-**Multipart Upload:**
-- CreateMultipartUpload, UploadPart, UploadPartCopy
-- CompleteMultipartUpload, AbortMultipartUpload
-- ListParts, ListMultipartUploads
+| Operation | Priority | Notes |
+|-----------|----------|-------|
+| GetItem | **P0** | Consistent read support |
+| PutItem | **P0** | Condition expressions |
+| DeleteItem | **P0** | Condition expressions |
+| UpdateItem | **P0** | Update expressions, conditions |
+| Query | **P0** | Key conditions, filter expressions, GSI |
+| Scan | **P0** | Filter expressions, pagination |
+| CreateTable | P1 | GSI support required |
+| DeleteTable | P1 | |
+| DescribeTable | P1 | Table status |
 
-**Versioning:**
-- Full version support in GetObject, DeleteObject, HeadObject
-- ListObjectVersions
+**Critical behaviors:**
+- Condition expression failures → `ConditionalCheckFailedException`
+- Item not found on GetItem → empty response (not error)
+- GSI queries with correct behavior
+- Proper `LastEvaluatedKey` pagination
 
-### Storage Backend Architecture
+### Lambda (Medium Fidelity)
 
-LocalStack uses an abstract `S3ObjectStore` with implementations:
+| Operation | Priority | Notes |
+|-----------|----------|-------|
+| Invoke | **P0** | Sync invocation, proper event format |
+| CreateFunction | P1 | Zip upload, env vars |
+| DeleteFunction | P1 | Cleanup |
+| GetFunction | P2 | Inspection |
 
-```python
-class S3ObjectStore(abc.ABC):
-    def open(bucket, s3_object, mode) -> S3StoredObject
-    def remove(bucket, s3_object)
-    def copy(src_bucket, src_object, dest_bucket, dest_object)
-    def get_multipart(bucket, upload_id) -> S3StoredMultipart
-    def remove_multipart(bucket, s3_multipart)
-```
-
-**EphemeralS3ObjectStore:**
-- Uses `SpooledTemporaryFile` for in-memory/disk hybrid storage
-- 512KB threshold for in-memory vs disk
-- Thread-safe with read/write locks
-- Calculates MD5/checksums during write
-
-### Key Behaviors & Edge Cases
-
-1. **Versioning:**
-   - `version_id=None` for unversioned buckets
-   - `version_id="null"` when versioning suspended
-   - Delete markers are special version entries
-   - Versioned KeyStore maintains ordered version lists
-
-2. **ETags:**
-   - MD5 hash for single uploads: `"md5hex"`
-   - Multipart: `"md5hex-partcount"`
-   - Content-MD5 header validation
-
-3. **Checksums:**
-   - CRC32, CRC32C, SHA1, SHA256, CRC64NVME
-   - Calculated during upload, validated on retrieval
-
-4. **Presigned URLs:**
-   - SigV2 and SigV4 support
-   - Query string authentication
-   - Expiration validation
-
-5. **Notifications:**
-   - EventBridge, SNS, SQS, Lambda destinations
-   - Event filtering by prefix/suffix
-   - Event types: s3:ObjectCreated:*, s3:ObjectRemoved:*, etc.
+**Critical behaviors:**
+- API Gateway event format (v1) compatibility
+- Flask/WSGI handler execution
+- Environment variable injection
+- Proper error response format
 
 ---
 
-## 3. DynamoDB Implementation Analysis
+## 2. LocalStack S3 Deep Dive
 
-### File Structure
-```
-localstack/services/dynamodb/
-├── provider.py  (100KB) - DynamoDB API implementation
-├── models.py    (4KB)   - Minimal models (delegates to DynamoDB Local)
-├── server.py    (8KB)   - DynamoDB Local server management
-├── utils.py     (15KB)  - Helper functions
-└── v2/          - CloudFormation resource handlers
-```
+### Core Implementation (`provider.py` - 201KB)
 
-### Architecture Approach
-
-**Critical Design Decision:** LocalStack uses **DynamoDB Local** as the backend!
+LocalStack's S3 implements operations through handler methods:
 
 ```python
-class DynamoDBProvider(DynamodbApi, ServiceLifecycleHook):
-    server: DynamodbServer  # Instance of DynamoDB Local
-    
-    def forward_request(self, context, service_request):
-        return self.server.proxy(context, service_request)
+@handler("GetObject")
+def get_object(self, context: RequestContext, request: GetObjectRequest) -> GetObjectOutput:
+    # 1. Validate bucket exists
+    # 2. Resolve version (we skip this - no versioning)
+    # 3. Check object exists
+    # 4. Handle range requests
+    # 5. Stream response body
 ```
 
-This means LocalStack:
-- Doesn't implement DynamoDB storage/query engine
-- Acts as a proxy with pre/post processing
-- Adds features DynamoDB Local lacks
+**Key behaviors to replicate:**
 
-### Features Added on Top of DynamoDB Local
+1. **ETag Calculation:**
+   ```python
+   etag = hashlib.md5(data).hexdigest()
+   # Returns: "d41d8cd98f00b204e9800998ecf8427e"
+   # With quotes in HTTP header
+   ```
 
-1. **Streams & Event Forwarding:**
-   - DynamoDB Streams (to `dynamodbstreams` service)
-   - Kinesis streaming destinations
-   - Stream record generation with OLD_IMAGE/NEW_IMAGE
+2. **Range Requests:**
+   - `Range: bytes=0-99` → first 100 bytes
+   - `Range: bytes=-100` → last 100 bytes
+   - Returns `206 Partial Content` with `Content-Range` header
 
-2. **Global Tables (v2017 & v2019):**
-   - Cross-region table replication simulation
-   - `TABLE_REGION` and `REPLICAS` tracking
+3. **Conditional Operations:**
+   - `If-Match` / `If-None-Match` with ETag
+   - `If-Modified-Since` / `If-Unmodified-Since`
+   - Returns `304 Not Modified` or `412 Precondition Failed`
 
-3. **TTL (Time-to-Live):**
-   - Background worker deletes expired items
-   - `ExpiredItemsWorker` runs hourly
+4. **ListObjectsV2 Pagination:**
+   ```python
+   # MaxKeys default: 1000
+   # ContinuationToken: opaque string for next page
+   # IsTruncated: true if more results
+   ```
 
-4. **ARN Fixing:**
-   - Converts DynamoDB Local ARNs to proper AWS format
+### Storage Backend
 
-5. **Server-Side Encryption (SSE):**
-   - KMS key management simulation
+LocalStack uses `EphemeralS3ObjectStore`:
+- `SpooledTemporaryFile` for objects (memory up to 512KB, then disk)
+- Thread-safe with reader/writer locks
+- MD5 calculated during write
 
-6. **Tagging:**
-   - Table ARN → tags mapping
-
-### API Operations
-
-**Fully Proxied (with modifications):**
-- CreateTable, DeleteTable, DescribeTable, UpdateTable
-- PutItem, GetItem, UpdateItem, DeleteItem
-- Query, Scan
-- BatchWriteItem, BatchGetItem
-- TransactWriteItems, TransactGetItems
-- ExecuteStatement, BatchExecuteStatement
-- DescribeTimeToLive, UpdateTimeToLive
-- ListTables, ListTagsOfResource
-
-**Custom Implementation:**
-- CreateGlobalTable, UpdateGlobalTable (v2017)
-- DescribeGlobalTable, ListGlobalTables
-- EnableKinesisStreamingDestination
-- DescribeContinuousBackups
-- TagResource, UntagResource
-
-### Edge Cases & Behaviors
-
-1. **Throughput Throttling:**
-   - Simulates ProvisionedThroughputExceededException
-   - Configurable via environment variables
-
-2. **Consumed Capacity:**
-   - Fixes response to include proper capacity units
-
-3. **Region Handling:**
-   - "localhost" region mapped to us-east-1
-   - Global table region routing
+**We can simplify:** Use pure in-memory with `DashMap` since integration tests are ephemeral.
 
 ---
 
-## 4. Lambda Implementation Analysis
+## 3. LocalStack DynamoDB Deep Dive
 
-### File Structure
+### Critical Insight: LocalStack Proxies to DynamoDB Local
+
+LocalStack does NOT implement DynamoDB's query engine. It:
+1. Starts DynamoDB Local (Java) as a subprocess
+2. Proxies all requests to it
+3. Adds features on top (streams, global tables, ARN fixing)
+
+```python
+def forward_request(self, context: RequestContext) -> ServiceResponse:
+    self.prepare_request_headers(headers, account_id, region_name)
+    return self.server.proxy(context, service_request)
 ```
-localstack/services/lambda_/
-├── provider.py         (203KB) - Main Lambda API
-├── api_utils.py        (31KB)  - ARN parsing, validation
-├── invocation/
-│   ├── lambda_service.py    (34KB) - Invocation orchestration
-│   ├── lambda_models.py     (21KB) - Function, Version, Alias models
-│   ├── version_manager.py   (15KB) - Version lifecycle
-│   ├── event_manager.py     (27KB) - Async invocation handling
-│   ├── docker_runtime_executor.py (21KB) - Container execution
-│   ├── execution_environment.py   (18KB) - Runtime environment
-│   └── executor_endpoint.py (11KB) - Runtime API server
-├── event_source_mapping/
-│   └── esm_worker.py        - Event source mapping workers
-├── runtimes.py              - Runtime image mappings
-└── layerfetcher/            - Layer handling
+
+### What LocalStack Adds
+
+1. **ARN Transformation:**
+   - DynamoDB Local returns `arn:aws:dynamodb:ddblocal:...`
+   - LocalStack fixes to `arn:aws:dynamodb:us-east-1:123456789012:...`
+
+2. **Streams (out of scope for us):**
+   - Generates stream records on mutations
+   - Forwards to DynamoDB Streams API
+
+3. **Error Enhancement:**
+   - Better error messages
+   - Consistent error codes
+
+### DynamoDB Local Behaviors
+
+DynamoDB Local is **highly compatible** with AWS DynamoDB for:
+- All item operations (Get, Put, Update, Delete)
+- Query and Scan with expressions
+- GSI and LSI
+- Condition expressions
+- Batch operations
+
+**Our approach:** Use DynamoDB Local as backend, similar to LocalStack.
+
+### Expression Handling Examples
+
+From the tests, critical expression behaviors:
+
+```python
+# Condition expression failure
+response = client.put_item(
+    TableName='test',
+    Item={'pk': {'S': 'key1'}},
+    ConditionExpression='attribute_not_exists(pk)'
+)
+# Raises: ConditionalCheckFailedException
+
+# Update expression
+response = client.update_item(
+    TableName='test',
+    Key={'pk': {'S': 'key1'}},
+    UpdateExpression='SET #attr = :val',
+    ExpressionAttributeNames={'#attr': 'data'},
+    ExpressionAttributeValues={':val': {'S': 'new-value'}}
+)
 ```
+
+---
+
+## 4. LocalStack Lambda Deep Dive
 
 ### Execution Model
 
-Lambda uses **containerized execution** with a custom Runtime Interface Client (RIC):
+Lambda uses Docker containers with a custom Runtime API:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Lambda Provider                                         │
-│  ├── LambdaService                                      │
-│  │   ├── LambdaVersionManager (per qualified ARN)      │
-│  │   ├── AssignmentService (container pool)            │
-│  │   └── CountingService (concurrency tracking)        │
-│  └── LambdaEventManager (async/queue handling)         │
-└─────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│  Docker Container                                        │
-│  ├── /var/rapid/init (LocalStack RIC)                  │
-│  ├── /var/task/ (function code)                        │
-│  └── /opt/ (layers)                                    │
-│                                                         │
-│  Runtime API: http://localhost:9001                     │
-│  ├── /runtime/invocation/next                          │
-│  ├── /runtime/invocation/{id}/response                 │
-│  └── /runtime/invocation/{id}/error                    │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│  Lambda Container                        │
+│  ├── AWS Lambda Runtime (RIC)           │
+│  ├── Function Code (/var/task)          │
+│  └── Runtime API Client                 │
+└─────────────────────────────────────────┘
+         │
+         ▼ HTTP (localhost:9001)
+┌─────────────────────────────────────────┐
+│  Runtime API Server (in LocalStack)     │
+│  ├── GET  /invocation/next              │
+│  ├── POST /invocation/{id}/response     │
+│  └── POST /invocation/{id}/error        │
+└─────────────────────────────────────────┘
 ```
 
-### API Operations Implemented
+### Flask/WSGI Compatibility
 
-**Function Management:**
-- CreateFunction, UpdateFunctionCode, UpdateFunctionConfiguration
-- GetFunction, GetFunctionConfiguration, ListFunctions
-- DeleteFunction
-- PublishVersion, ListVersionsByFunction
+For Flask apps, the handler typically uses a wrapper:
 
-**Aliases:**
-- CreateAlias, GetAlias, UpdateAlias, DeleteAlias, ListAliases
-- Weighted alias routing
+```python
+# Using aws-wsgi or mangum
+from mangum import Mangum
+from flask import Flask
 
-**Invocation:**
-- Invoke (sync/async/dry-run)
-- InvokeAsync (deprecated API)
+app = Flask(__name__)
+handler = Mangum(app)
+```
 
-**Event Source Mappings:**
-- CreateEventSourceMapping, UpdateEventSourceMapping
-- DeleteEventSourceMapping, GetEventSourceMapping
-- ListEventSourceMappings
-- Sources: SQS, Kinesis, DynamoDB Streams, Kafka
+The handler receives an **API Gateway v1 event**:
 
-**Function URLs:**
-- CreateFunctionUrlConfig, GetFunctionUrlConfig
-- UpdateFunctionUrlConfig, DeleteFunctionUrlConfig
-- ListFunctionUrlConfigs
+```json
+{
+  "httpMethod": "GET",
+  "path": "/api/users",
+  "headers": {"Content-Type": "application/json"},
+  "queryStringParameters": {"page": "1"},
+  "body": null,
+  "isBase64Encoded": false,
+  "requestContext": {
+    "requestId": "abc123",
+    "stage": "prod",
+    "httpMethod": "GET",
+    "path": "/api/users"
+  }
+}
+```
 
-**Permissions:**
-- AddPermission, RemovePermission, GetPolicy
+And returns:
 
-**Layers:**
-- PublishLayerVersion, GetLayerVersion, DeleteLayerVersion
-- ListLayers, ListLayerVersions
-- AddLayerVersionPermission, RemoveLayerVersionPermission
+```json
+{
+  "statusCode": 200,
+  "headers": {"Content-Type": "application/json"},
+  "body": "{\"users\": []}",
+  "isBase64Encoded": false
+}
+```
 
-**Concurrency:**
-- PutFunctionConcurrency, GetFunctionConcurrency
-- DeleteFunctionConcurrency
-- PutProvisionedConcurrencyConfig, GetProvisionedConcurrencyConfig
+### Environment Variables
 
-**Configuration:**
-- PutFunctionEventInvokeConfig
-- GetFunctionEventInvokeConfig
-- UpdateFunctionEventInvokeConfig
+Critical for Flask apps:
+- `AWS_REGION`, `AWS_DEFAULT_REGION`
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- Custom app config (database URLs, etc.)
 
-### Execution Flow
-
-1. **Function Creation:**
-   - Validate runtime, architecture, VPC config
-   - Store code (S3 reference or zip)
-   - Initialize VersionManager
-
-2. **Invocation:**
-   - Route through alias/version resolution
-   - Check concurrency limits
-   - Acquire container from pool
-   - Send payload via Runtime API
-   - Return response or queue for async
-
-3. **Container Management:**
-   - Pre-built images per runtime
-   - Hot reloading support
-   - Container reuse with keep-alive
-
-### Key Behaviors
-
-1. **State Machine:**
-   - Pending → Active/Failed
-   - LastUpdateStatus tracking
-   - SnapStart optimization
-
-2. **Error Handling:**
-   - ResourceNotFoundException, InvalidParameterValueException
-   - Timeout handling with max 900s
-   - Dead letter queues for async failures
-
-3. **Hot Reloading:**
-   - `LOCALSTACK_HOT_RELOADING_PATHS` env var
-   - File watch and container restart
+Lambda injects these into the container environment.
 
 ---
 
-## 5. Existing Rust Projects Analysis
+## 5. Existing Rust Projects
 
-### s3s (s3s-project/s3s)
+### s3s (Recommended for S3)
 
-**Pros:**
-- Production-quality S3 implementation framework
-- Generated from AWS Smithy models
-- Full S3 trait with ~100 operations
-- SigV4/SigV2 authentication
+The [s3s project](https://github.com/s3s-project/s3s) provides:
+- Complete S3 API trait (generated from Smithy)
+- SigV4 authentication
 - File system backend (s3s-fs)
-- Hyper/Tower based HTTP handling
-- Active development (2024-2025)
+- Active maintenance
 
-**Cons:**
-- S3-only (no DynamoDB/Lambda)
-- Designed as framework, not standalone server
-- Missing some advanced features (notifications, replication)
+**Pros for us:**
+- GetObject, PutObject, etc. already structured
+- Error types match AWS
+- Can implement custom backend
 
-**Technical Details:**
-- Rust 1.88+, edition 2024
-- Uses axum/hyper for HTTP
-- CRC32, CRC32C, SHA1, SHA256 checksums
-- OpenDAL integration for storage
+**We should:** Use s3s as foundation, implement `EphemeralStorage` backend.
 
-**Code Quality:**
-- Clippy pedantic compliance
-- Comprehensive error handling
-- Generated code from Smithy
+### DynamoDB Options
 
-### rusoto_mock
-
-**Status:** Deprecated (rusoto is archived)
-**Use:** Historical reference only
-
-### Other Notable Projects
-
-- **minio-rs**: Client library, not server
-- **garage**: Distributed S3, too complex for local dev
-- **OpenDAL**: Object storage abstraction layer
+No good Rust DynamoDB server exists. Options:
+1. **Proxy to DynamoDB Local** (recommended, like LocalStack)
+2. Native implementation (massive effort)
 
 ---
 
-## 6. Critical Behaviors for AWS Fidelity
+## 6. Error Fidelity Requirements
 
-### Error Response Format
+### S3 Error Format (XML)
 
-AWS returns XML errors with specific structure:
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <Error>
-    <Code>NoSuchBucket</Code>
-    <Message>The specified bucket does not exist</Message>
-    <BucketName>example-bucket</BucketName>
-    <RequestId>tx00000000000000000001-00...</RequestId>
+    <Code>NoSuchKey</Code>
+    <Message>The specified key does not exist.</Message>
+    <Key>my-object-key</Key>
+    <RequestId>tx00000000000000000001</RequestId>
     <HostId>...</HostId>
 </Error>
 ```
 
-### Request Authentication
+HTTP Status: 404
+Headers: `x-amz-request-id`, `x-amz-id-2`
 
-1. **Signature Version 4:**
-   - Authorization header parsing
-   - Canonical request generation
-   - String-to-sign calculation
-   - Streaming signatures (chunked)
+### DynamoDB Error Format (JSON)
 
-2. **Presigned URLs:**
-   - Query parameter authentication
-   - X-Amz-* headers in query string
-   - Expiration enforcement
+```json
+{
+    "__type": "com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException",
+    "message": "The conditional request failed"
+}
+```
 
-### Consistency Model
+HTTP Status: 400
+Header: `x-amzn-RequestId`
 
-AWS S3 is strongly consistent as of 2020. Key behaviors:
-- PUT then GET returns latest
-- DELETE then GET returns 404
-- List operations see latest objects
+### Lambda Error Format (JSON)
 
-### Request ID Generation
+For function errors:
+```json
+{
+    "errorMessage": "division by zero",
+    "errorType": "ZeroDivisionError",
+    "stackTrace": ["..."]
+}
+```
 
-- `x-amz-request-id`: 16 hex chars (S3), UUID (DynamoDB)
-- `x-amz-id-2`: Base64 encoded extended ID
-
----
-
-## 7. Recommendations for RustStack
-
-### Phase 1: S3 Priority
-
-1. **Use s3s as foundation** - Don't reinvent HTTP/auth layer
-2. **Implement robust storage backend** - Start with ephemeral, plan for persistent
-3. **Focus on core operations first:**
-   - Object CRUD (Get, Put, Delete, Head, Copy)
-   - Multipart upload
-   - Versioning
-   - Bucket operations
-
-### Phase 2: DynamoDB
-
-Two options:
-
-**Option A: Embed DynamoDB Local (Java)**
-- Pros: Full compatibility, proven
-- Cons: JVM dependency, large footprint
-
-**Option B: Native Implementation**
-- Pros: Pure Rust, smaller footprint
-- Cons: Massive undertaking (query engine, indexes, expressions)
-
-**Recommendation:** Start with Option A (like LocalStack), add native as stretch goal.
-
-### Phase 3: Lambda
-
-- Container-based execution is correct approach
-- Runtime API is well-documented
-- Focus on basic invocation first, add event sources later
-
-### Test Strategy
-
-1. **AWS SDK Compatibility Tests:**
-   - Use official aws-sdk-rust
-   - Run against RustStack and verify behavior
-
-2. **Snapshot Testing:**
-   - Capture response structures
-   - Compare with LocalStack snapshots
-
-3. **Integration Tests:**
-   - Real AWS comparison where safe
-   - Mock time/randomness for determinism
+Headers: `X-Amz-Function-Error: Unhandled`
 
 ---
 
-## Appendix A: LocalStack Test Coverage Analysis
+## 7. Test Strategy
 
-From test files in `tests/aws/services/`:
+### S3 Compatibility Tests
 
-### S3 Tests (~30 test files)
-- `test_s3_api.py` - CRUD, versioning, delete markers
-- `test_s3_list_operations.py` - ListObjects, ListObjectsV2, pagination
-- `test_s3_preconditions.py` - If-Match, If-None-Match headers
-- `test_s3_cors.py` - CORS configuration and preflight
-- `test_s3_notifications_*.py` - Event notifications to SQS/SNS/Lambda/EventBridge
-- `test_s3_concurrency.py` - Concurrent upload handling
+```rust
+#[tokio::test]
+async fn test_get_nonexistent_key() {
+    let client = create_s3_client().await;
+    
+    let result = client.get_object()
+        .bucket("test-bucket")
+        .key("nonexistent")
+        .send()
+        .await;
+    
+    let err = result.unwrap_err();
+    // Must be NoSuchKey, not generic error
+    assert!(err.to_string().contains("NoSuchKey"));
+}
 
-### DynamoDB Tests
-- `test_dynamodb.py` - Core operations
-- Item expressions, condition expressions
-- Global tables
-- Streams integration
+#[tokio::test]
+async fn test_list_objects_pagination() {
+    // Create 1500 objects
+    // List with MaxKeys=1000
+    // Verify IsTruncated=true
+    // Use ContinuationToken
+    // Verify all objects retrieved
+}
+```
 
-### Lambda Tests
-- Function lifecycle
-- Invocation modes
-- Event source mappings
-- Layers
-- Concurrency
+### DynamoDB Compatibility Tests
+
+```rust
+#[tokio::test]
+async fn test_condition_expression_failure() {
+    let client = create_dynamodb_client().await;
+    
+    // Put item
+    client.put_item()
+        .table_name("test")
+        .item("pk", AttributeValue::S("key1".into()))
+        .send()
+        .await
+        .unwrap();
+    
+    // Put with condition that should fail
+    let result = client.put_item()
+        .table_name("test")
+        .item("pk", AttributeValue::S("key1".into()))
+        .condition_expression("attribute_not_exists(pk)")
+        .send()
+        .await;
+    
+    assert!(result.is_err());
+    // Must be ConditionalCheckFailedException
+}
+```
+
+### Lambda Integration Test
+
+```rust
+#[tokio::test]
+async fn test_flask_lambda_invocation() {
+    // Create function with Flask app
+    // Invoke with API Gateway event
+    // Verify response matches Flask route
+}
+```
 
 ---
 
-## Appendix B: API Surface Comparison
+## 8. Out of Scope (Explicit)
 
-| Service | AWS Operations | LocalStack Implemented | RustStack Target |
-|---------|---------------|----------------------|------------------|
-| S3 | ~100 | ~95 | 50 (core) |
-| DynamoDB | ~50 | ~45 | 30 (core) |
-| Lambda | ~60 | ~55 | 30 (core) |
+### S3
+- ❌ Versioning
+- ❌ Lifecycle rules
+- ❌ Replication
+- ❌ Object lock
+- ❌ Notifications
+- ❌ Multipart upload (can add later if needed)
 
-Priority operations for MVP are marked in PLAN.md.
+### DynamoDB
+- ❌ Streams
+- ❌ Transactions
+- ❌ DAX
+- ❌ Global tables
+- ❌ Backup/restore
+- ❌ Kinesis streaming
+
+### Lambda
+- ❌ Layers
+- ❌ Provisioned concurrency
+- ❌ Destinations
+- ❌ Event source mappings
+- ❌ Aliases/versions
+
+---
+
+## 9. Recommendations
+
+### Phase 1: S3 Core (Week 1-2)
+1. Use s3s framework
+2. Implement in-memory storage
+3. Focus on: GetObject, PutObject, DeleteObject, HeadObject, ListObjectsV2
+4. Perfect error codes
+
+### Phase 2: DynamoDB (Week 3-4)
+1. Integrate DynamoDB Local as subprocess
+2. Implement proxy with ARN fixing
+3. Verify expression handling
+4. Test with real Flask app patterns
+
+### Phase 3: Lambda (Week 5-6)
+1. Docker container execution
+2. API Gateway v1 event format
+3. Flask/Mangum compatibility testing
+4. Environment variable injection
+
+### Phase 4: Integration (Week 7-8)
+1. End-to-end Flask app testing
+2. Error scenario coverage
+3. Performance baseline
+4. Documentation

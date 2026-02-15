@@ -1,6 +1,7 @@
 //! AWS error types and formatting
 
 use serde::Serialize;
+use std::fmt;
 use thiserror::Error;
 
 /// Common AWS error codes
@@ -40,6 +41,12 @@ pub enum ErrorCode {
     InvalidParameterValue,
     ServiceException,
     TooManyRequestsException,
+}
+
+impl fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 impl ErrorCode {

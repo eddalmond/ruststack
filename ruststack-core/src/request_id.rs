@@ -20,7 +20,7 @@ impl RequestId {
         // Extended ID is typically a base64-encoded value containing additional context
         // For simplicity, we use another UUID encoded
         let extended_uuid = Uuid::new_v4();
-        let extended_id = base64_encode(&extended_uuid.as_bytes()[..]);
+        let extended_id = base64_encode(extended_uuid.as_bytes());
 
         Self { id, extended_id }
     }
@@ -40,13 +40,8 @@ impl Default for RequestId {
 }
 
 fn base64_encode(data: &[u8]) -> String {
-    use std::io::Write;
-    let mut buf = Vec::new();
-    {
-        let mut encoder = base64::write::EncoderWriter::new(&mut buf, &base64::engine::general_purpose::STANDARD);
-        encoder.write_all(data).unwrap();
-    }
-    String::from_utf8(buf).unwrap()
+    use base64::{Engine, engine::general_purpose};
+    general_purpose::STANDARD.encode(data)
 }
 
 #[cfg(test)]

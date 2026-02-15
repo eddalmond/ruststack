@@ -31,8 +31,8 @@ crc32fast.workspace = true
 hex.workspace = true
 base64.workspace = true
 
-# S3 framework
-s3s.workspace = true
+# Async trait  
+async-trait.workspace = true
 
 [dev-dependencies]
 aws-sdk-s3.workspace = true

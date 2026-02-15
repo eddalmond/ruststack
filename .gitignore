@@ -1,5 +1,7 @@
-localstack-repo/
-s3s-repo/
-target/
-*.log
-.DS_Store
+/target
+/localstack-repo
+/s3s-repo
+Cargo.lock
+*.jar
+.idea/
+.vscode/

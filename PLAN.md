@@ -1,621 +1,385 @@
-# RustStack Implementation Plan
+# RustStack Implementation Plan (Focused Scope)
 
 ## Overview
 
-This document outlines the implementation plan for RustStack, a Rust-based AWS local emulator. The plan is divided into phases with clear milestones and deliverables.
+RustStack is a Rust-based AWS local emulator for **integration testing Flask/Lambda applications**. This plan prioritizes depth over breadth - bulletproof core operations.
 
-**Target Timeline:** 12-16 weeks for MVP
-
----
-
-## Phase 0: Project Setup (Week 1)
-
-### Goals
-- Set up project structure and tooling
-- Establish CI/CD pipeline
-- Create development environment
-
-### Tasks
-
-- [ ] **0.1** Initialize Cargo workspace
-- [ ] **0.2** Set up project structure per ARCHITECTURE.md
-- [ ] **0.3** Configure CI (GitHub Actions)
-  - Lint (clippy)
-  - Format (rustfmt)
-  - Build (debug + release)
-  - Unit tests
-- [ ] **0.4** Add pre-commit hooks
-- [ ] **0.5** Create Dockerfile for development
-- [ ] **0.6** Set up integration test infrastructure
-- [ ] **0.7** Write README with quick start
-
-### Deliverables
-- Working `cargo build` and `cargo test`
-- CI passing on all commits
-- Development Docker image
+**Target Timeline:** 8 weeks for production-ready MVP
 
 ---
 
-## Phase 1: Core Infrastructure (Weeks 2-3)
+## Scope Definition
 
-### Goals
-- HTTP server with routing
-- Request authentication framework
-- Error handling and response formatting
+### In Scope (Must Be Bulletproof)
 
-### Tasks
+**S3:**
+- GetObject (with range requests)
+- PutObject (streaming, Content-MD5)
+- DeleteObject
+- HeadObject
+- ListObjectsV2 (pagination, prefix)
+- CreateBucket, DeleteBucket, HeadBucket
+- Exact AWS error codes
 
-- [ ] **1.1** Create `ruststack-core` crate
-  - [ ] AWS error types (S3Error, DynamoDBError, LambdaError)
-  - [ ] Request context (account_id, region)
-  - [ ] Request ID generation
-  - [ ] Response formatting utilities
+**DynamoDB:**
+- GetItem, PutItem, DeleteItem, UpdateItem
+- Query, Scan (with expressions)
+- CreateTable, DeleteTable, DescribeTable
+- GSI support
+- Condition expression failures
 
-- [ ] **1.2** Create `ruststack-auth` crate
-  - [ ] SigV4 signature validation (can disable for dev)
-  - [ ] SigV2 signature validation (legacy)
-  - [ ] Presigned URL validation
-  - [ ] Credential extraction
+**Lambda:**
+- CreateFunction (zip upload)
+- Invoke (sync, API Gateway v1 format)
+- DeleteFunction
+- Flask/WSGI handler execution
 
-- [ ] **1.3** Create main `ruststack` binary crate
-  - [ ] CLI argument parsing (clap)
-  - [ ] Configuration loading (TOML/env)
-  - [ ] Axum server setup
-  - [ ] Basic routing skeleton
+### Explicitly Out of Scope
 
-- [ ] **1.4** Implement request logging
-  - [ ] Request/response tracing
-  - [ ] Performance metrics
-  - [ ] Configurable log levels
-
-### Deliverables
-- HTTP server accepting requests on port 4566
-- Authentication middleware (bypassable)
-- Structured error responses
-- Request logging
-
-### Tests
-- Unit tests for auth module
-- Integration test: server starts and responds
+- S3: versioning, lifecycle, replication, multipart, notifications
+- DynamoDB: streams, transactions, DAX, global tables
+- Lambda: layers, provisioned concurrency, event sources, aliases
 
 ---
 
-## Phase 2: S3 Core (Weeks 4-7)
+## Phase 1: Project Setup & S3 Core (Weeks 1-2)
 
-### Goals
-- Core S3 object operations
-- In-memory storage backend
-- AWS SDK compatibility
+### Week 1: Foundation
 
-### Week 4-5: Basic Operations
+#### Day 1-2: Project Setup
+- [x] Initialize workspace structure
+- [x] Create core crates (ruststack-core, ruststack-auth, etc.)
+- [x] Set up error types and request ID generation
+- [ ] Configure CI/CD (GitHub Actions)
+- [ ] Add rustfmt, clippy, test jobs
 
-- [ ] **2.1** Integrate s3s framework
-  - [ ] Configure s3s with custom backend
-  - [ ] Set up routing for S3 endpoints
-  - [ ] Virtual-hosted style support
-  - [ ] Path-style support
+#### Day 3-5: S3 Storage Backend
+- [x] Define `ObjectStorage` trait
+- [x] Implement `EphemeralStorage` with DashMap
+- [x] Add unit tests for storage operations
+- [ ] Benchmark storage performance
 
-- [ ] **2.2** Implement storage backend trait
-  - [ ] Define `ObjectStorage` trait
-  - [ ] Implement `EphemeralStorage`
-  - [ ] Bucket management (create, delete, list)
-  - [ ] Object metadata storage
+**Deliverable:** Storage backend with full test coverage
 
-- [ ] **2.3** Implement bucket operations
-  - [ ] CreateBucket
-  - [ ] DeleteBucket
-  - [ ] HeadBucket
-  - [ ] ListBuckets
-  - [ ] GetBucketLocation
+### Week 2: S3 HTTP Layer
 
-- [ ] **2.4** Implement object CRUD
-  - [ ] PutObject (streaming body)
-  - [ ] GetObject (with range support)
-  - [ ] HeadObject
-  - [ ] DeleteObject
-  - [ ] DeleteObjects (batch)
-  - [ ] CopyObject
+#### Day 1-3: Integrate s3s Framework
+- [ ] Add s3s dependency
+- [ ] Implement `S3` trait for `RustStackS3`
+- [ ] Wire up HTTP routing
+- [ ] Test with aws-sdk-s3
 
-### Week 6: Multipart Upload
+#### Day 4-5: Error Handling
+- [ ] Implement S3-specific errors (NoSuchKey, NoSuchBucket, etc.)
+- [ ] XML error response formatting
+- [ ] Add error code tests against AWS behavior
 
-- [ ] **2.5** Implement multipart upload
-  - [ ] CreateMultipartUpload
-  - [ ] UploadPart
-  - [ ] UploadPartCopy
-  - [ ] CompleteMultipartUpload
-  - [ ] AbortMultipartUpload
-  - [ ] ListParts
-  - [ ] ListMultipartUploads
+**Deliverable:** Working S3 with GetObject, PutObject, DeleteObject, HeadObject, ListObjectsV2
 
-### Week 7: Versioning & Metadata
-
-- [ ] **2.6** Implement versioning
-  - [ ] PutBucketVersioning
-  - [ ] GetBucketVersioning
-  - [ ] Versioned storage backend
-  - [ ] Delete markers
-  - [ ] ListObjectVersions
-
-- [ ] **2.7** Implement metadata operations
-  - [ ] GetObjectTagging
-  - [ ] PutObjectTagging
-  - [ ] DeleteObjectTagging
-  - [ ] GetBucketTagging
-  - [ ] PutBucketTagging
-
-- [ ] **2.8** Implement checksums
-  - [ ] MD5 (ETag)
-  - [ ] Content-MD5 validation
-  - [ ] CRC32, CRC32C
-  - [ ] SHA1, SHA256
-
-### Deliverables
-- Functional S3 service with core operations
-- Multipart upload support
-- Versioning support
-- Checksum validation
-
-### Tests
-- Unit tests for storage backend
-- Integration tests with aws-sdk-s3
-- Multipart upload tests
-- Versioning behavior tests
-
-### Compatibility Tests (Priority Operations)
+### Milestone 1 Tests
 
 ```rust
-// tests/s3/basic.rs
-#[tokio::test]
-async fn test_put_get_object() {
-    let client = create_test_client().await;
-    
-    // Put object
-    client.put_object()
-        .bucket("test-bucket")
-        .key("test-key")
-        .body(ByteStream::from_static(b"hello world"))
-        .send()
-        .await
-        .unwrap();
-    
-    // Get object
-    let result = client.get_object()
-        .bucket("test-bucket")
-        .key("test-key")
-        .send()
-        .await
-        .unwrap();
-    
-    let body = result.body.collect().await.unwrap().into_bytes();
-    assert_eq!(&body[..], b"hello world");
-}
+// All must pass against RustStack AND AWS
+#[tokio::test] async fn test_put_get_object();
+#[tokio::test] async fn test_get_nonexistent_key_returns_no_such_key();
+#[tokio::test] async fn test_delete_nonexistent_bucket_returns_no_such_bucket();
+#[tokio::test] async fn test_list_objects_pagination();
+#[tokio::test] async fn test_head_object_metadata();
+#[tokio::test] async fn test_range_request();
 ```
 
 ---
 
-## Phase 3: DynamoDB (Weeks 8-10)
+## Phase 2: DynamoDB (Weeks 3-4)
 
-### Goals
-- DynamoDB Local integration
-- Full API proxy
-- Streams support
+### Week 3: DynamoDB Local Integration
 
-### Week 8: DynamoDB Local Setup
+#### Day 1-2: Server Management
+- [x] DynamoDB Local download/extraction
+- [x] Process lifecycle management
+- [ ] Health check implementation
+- [ ] Automatic port allocation
 
-- [ ] **3.1** Create `ruststack-dynamodb` crate
-  - [ ] DynamoDB Local download/management
-  - [ ] Process lifecycle management
-  - [ ] Health checking
+#### Day 3-5: Proxy Implementation
+- [x] Basic request forwarding
+- [ ] ARN transformation (ddblocal → proper ARN)
+- [ ] Error response passthrough
+- [ ] Request/response logging
 
-- [ ] **3.2** Implement proxy layer
-  - [ ] Request forwarding
-  - [ ] ARN transformation
-  - [ ] Error mapping
+**Deliverable:** DynamoDB proxy with CreateTable, DeleteTable, DescribeTable
 
-- [ ] **3.3** Add basic API routing
-  - [ ] CreateTable
-  - [ ] DeleteTable
-  - [ ] DescribeTable
-  - [ ] ListTables
+### Week 4: DynamoDB Operations
 
-### Week 9: Core Operations
+#### Day 1-3: Item Operations
+- [ ] GetItem, PutItem, DeleteItem, UpdateItem
+- [ ] Verify condition expression failures
+- [ ] Test with real update expressions
 
-- [ ] **3.4** Implement item operations
-  - [ ] PutItem
-  - [ ] GetItem
-  - [ ] UpdateItem
-  - [ ] DeleteItem
-  - [ ] Query
-  - [ ] Scan
+#### Day 4-5: Query/Scan
+- [ ] Query with key conditions
+- [ ] GSI queries
+- [ ] Scan with filter expressions
+- [ ] Pagination (LastEvaluatedKey)
 
-- [ ] **3.5** Implement batch operations
-  - [ ] BatchWriteItem
-  - [ ] BatchGetItem
-  - [ ] TransactWriteItems
-  - [ ] TransactGetItems
+**Deliverable:** Full DynamoDB item operations with expression support
 
-### Week 10: Advanced Features
+### Milestone 2 Tests
 
-- [ ] **3.6** Implement streams support
-  - [ ] Stream record generation
-  - [ ] DescribeStream
-  - [ ] GetShardIterator
-  - [ ] GetRecords
-
-- [ ] **3.7** Implement tagging and TTL
-  - [ ] TagResource
-  - [ ] UntagResource
-  - [ ] ListTagsOfResource
-  - [ ] UpdateTimeToLive
-  - [ ] DescribeTimeToLive
-
-### Deliverables
-- Full DynamoDB API via proxy
-- Streams support
-- State persistence
-
-### Tests
-- Table creation/deletion
-- CRUD operations
-- Batch operations
-- Transaction tests
+```rust
+#[tokio::test] async fn test_put_get_item();
+#[tokio::test] async fn test_condition_expression_fails();
+#[tokio::test] async fn test_update_expression();
+#[tokio::test] async fn test_query_with_key_condition();
+#[tokio::test] async fn test_query_gsi();
+#[tokio::test] async fn test_scan_with_filter();
+#[tokio::test] async fn test_query_pagination();
+```
 
 ---
 
-## Phase 4: Lambda (Weeks 11-14)
+## Phase 3: Lambda (Weeks 5-6)
 
-### Goals
-- Container-based Lambda execution
-- Runtime API implementation
-- Event source mappings
+### Week 5: Container Execution
 
-### Week 11: Function Management
+#### Day 1-2: Docker Integration
+- [ ] Bollard Docker client setup
+- [ ] Runtime image pulling (Python 3.11/3.12)
+- [ ] Container creation with mounts
 
-- [ ] **4.1** Create `ruststack-lambda` crate
-  - [ ] Function models
-  - [ ] State management
-  - [ ] ARN parsing/validation
+#### Day 3-5: Runtime API
+- [x] Runtime API server (axum routes)
+- [ ] Invocation delivery
+- [ ] Response collection
+- [ ] Timeout handling
 
-- [ ] **4.2** Implement function CRUD
-  - [ ] CreateFunction
-  - [ ] GetFunction
-  - [ ] UpdateFunctionCode
-  - [ ] UpdateFunctionConfiguration
-  - [ ] DeleteFunction
-  - [ ] ListFunctions
+**Deliverable:** Basic Lambda invocation working
 
-- [ ] **4.3** Implement versioning
-  - [ ] PublishVersion
-  - [ ] ListVersionsByFunction
-  - [ ] GetFunctionConfiguration
+### Week 6: Flask Compatibility
 
-### Week 12: Container Execution
+#### Day 1-3: API Gateway Event Format
+- [x] API Gateway v1 event structure
+- [x] Response format
+- [ ] HTTP method/path/headers mapping
+- [ ] Query string handling
 
-- [ ] **4.4** Implement container management
-  - [ ] Docker integration (bollard)
-  - [ ] Runtime image mapping
-  - [ ] Container pool management
-  - [ ] Warm container reuse
+#### Day 4-5: Integration Testing
+- [ ] Create test Flask app
+- [ ] Test with Mangum adapter
+- [ ] Verify request/response cycle
+- [ ] Environment variable injection
 
-- [ ] **4.5** Implement Runtime API
-  - [ ] /runtime/invocation/next
-  - [ ] /runtime/invocation/{id}/response
-  - [ ] /runtime/invocation/{id}/error
-  - [ ] /runtime/init/error
+**Deliverable:** Flask app running in Lambda with correct behavior
 
-- [ ] **4.6** Implement Invoke
-  - [ ] Synchronous invocation
-  - [ ] Asynchronous invocation
-  - [ ] DryRun validation
+### Milestone 3 Tests
 
-### Week 13: Aliases & Permissions
-
-- [ ] **4.7** Implement aliases
-  - [ ] CreateAlias
-  - [ ] GetAlias
-  - [ ] UpdateAlias
-  - [ ] DeleteAlias
-  - [ ] ListAliases
-  - [ ] Weighted routing
-
-- [ ] **4.8** Implement permissions
-  - [ ] AddPermission
-  - [ ] RemovePermission
-  - [ ] GetPolicy
-
-### Week 14: Event Source Mappings
-
-- [ ] **4.9** Implement event source framework
-  - [ ] CreateEventSourceMapping
-  - [ ] GetEventSourceMapping
-  - [ ] UpdateEventSourceMapping
-  - [ ] DeleteEventSourceMapping
-  - [ ] ListEventSourceMappings
-
-- [ ] **4.10** Implement SQS integration
-  - [ ] SQS event polling
-  - [ ] Batch processing
-  - [ ] Error handling
-
-### Deliverables
-- Lambda function execution
-- Docker-based runtime
-- Basic event source mappings
-
-### Tests
-- Function creation/execution
-- Multiple runtimes (Node.js, Python)
-- Alias routing
-- Event source processing
+```rust
+#[tokio::test] async fn test_create_invoke_delete_function();
+#[tokio::test] async fn test_flask_get_request();
+#[tokio::test] async fn test_flask_post_with_body();
+#[tokio::test] async fn test_flask_error_response();
+#[tokio::test] async fn test_environment_variables();
+```
 
 ---
 
-## Phase 5: Integration & Polish (Weeks 15-16)
+## Phase 4: Integration & Polish (Weeks 7-8)
 
-### Goals
-- Cross-service integration
-- Performance optimization
-- Documentation
+### Week 7: End-to-End Testing
 
-### Week 15: Integration
+#### Day 1-3: Full Stack Tests
+- [ ] Flask app using S3 for file storage
+- [ ] Flask app using DynamoDB for data
+- [ ] Error scenarios (missing objects, failed conditions)
 
-- [ ] **5.1** S3 to Lambda notifications
-  - [ ] Event filtering
-  - [ ] Lambda invocation on S3 events
+#### Day 4-5: Performance & Reliability
+- [ ] Cold start benchmarks
+- [ ] Concurrent request handling
+- [ ] Memory usage profiling
+- [ ] Stress testing
 
-- [ ] **5.2** DynamoDB Streams to Lambda
-  - [ ] Stream processing
-  - [ ] Batch windowing
+### Week 8: Documentation & Release
 
-- [ ] **5.3** End-to-end testing
-  - [ ] Multi-service workflows
-  - [ ] Error scenarios
-  - [ ] Edge cases
+#### Day 1-3: Documentation
+- [ ] README with quickstart
+- [ ] Configuration reference
+- [ ] Troubleshooting guide
+- [ ] API compatibility matrix
 
-### Week 16: Polish
-
-- [ ] **5.4** Performance optimization
-  - [ ] Profiling
-  - [ ] Memory optimization
-  - [ ] Startup time reduction
-
-- [ ] **5.5** Documentation
-  - [ ] API documentation
-  - [ ] Usage examples
-  - [ ] Configuration reference
-  - [ ] Troubleshooting guide
-
-- [ ] **5.6** Release preparation
-  - [ ] Version tagging
-  - [ ] Changelog
-  - [ ] Docker hub image
-  - [ ] Homebrew formula
-
-### Deliverables
-- Production-ready MVP
-- Complete documentation
-- Published releases
+#### Day 4-5: Release
+- [ ] Docker image (multi-arch)
+- [ ] Binary releases (Linux, macOS)
+- [ ] GitHub release
+- [ ] Example project
 
 ---
 
 ## Test Strategy
 
-### Unit Tests
+### Unit Tests (Per Crate)
 
-Each crate has its own unit tests:
+Each crate has `src/` code and `tests/` for unit tests:
 
 ```
-ruststack-core/src/error.rs      → ruststack-core/tests/error_tests.rs
-ruststack-s3/src/versioning.rs   → ruststack-s3/tests/versioning_tests.rs
-ruststack-auth/src/sigv4.rs      → ruststack-auth/tests/sigv4_tests.rs
+ruststack-s3/
+├── src/
+│   ├── storage/
+│   │   ├── ephemeral.rs    # Has inline #[cfg(test)] mod tests
+│   │   └── traits.rs
+│   └── service.rs
+└── tests/
+    └── storage_tests.rs    # Additional integration tests
 ```
 
 ### Integration Tests
 
-Using AWS SDK for Rust:
+Use AWS SDK for Rust against RustStack:
 
 ```rust
-// tests/integration/s3_basic.rs
-use aws_config::BehaviorVersion;
-use aws_sdk_s3::Client;
-
-async fn create_client() -> Client {
+// tests/integration/s3.rs
+async fn create_client() -> aws_sdk_s3::Client {
     let config = aws_config::defaults(BehaviorVersion::latest())
         .endpoint_url("http://localhost:4566")
+        .credentials_provider(Credentials::new("test", "test", None, None, "test"))
         .load()
         .await;
-    Client::new(&config)
-}
-
-#[tokio::test]
-async fn test_bucket_lifecycle() {
-    let client = create_client().await;
-    
-    // Create bucket
-    client.create_bucket()
-        .bucket("test-bucket")
-        .send()
-        .await
-        .unwrap();
-    
-    // Verify exists
-    let result = client.head_bucket()
-        .bucket("test-bucket")
-        .send()
-        .await;
-    assert!(result.is_ok());
-    
-    // Delete bucket
-    client.delete_bucket()
-        .bucket("test-bucket")
-        .send()
-        .await
-        .unwrap();
-}
-```
-
-### Snapshot Tests
-
-Compare responses with known-good outputs:
-
-```rust
-#[tokio::test]
-async fn test_error_response_format() {
-    let client = create_client().await;
-    
-    let result = client.get_object()
-        .bucket("nonexistent-bucket")
-        .key("key")
-        .send()
-        .await;
-    
-    let error = result.unwrap_err();
-    insta::assert_snapshot!(format!("{:?}", error));
+    aws_sdk_s3::Client::new(&config)
 }
 ```
 
 ### Compatibility Tests
 
-Run same tests against LocalStack and AWS:
+Run same tests against LocalStack and AWS to verify behavior matches:
 
 ```bash
 # Run against RustStack
 ENDPOINT_URL=http://localhost:4566 cargo test --test compatibility
 
-# Run against LocalStack
-ENDPOINT_URL=http://localhost:4566 cargo test --test compatibility
+# Run against LocalStack (reference)
+ENDPOINT_URL=http://localhost:4567 cargo test --test compatibility
 
-# Run against AWS (careful!)
-AWS_PROFILE=test cargo test --test compatibility
+# Run against AWS (golden master, be careful with costs)
+AWS_PROFILE=test cargo test --test compatibility -- --ignored
 ```
-
----
-
-## Risk Assessment
-
-### High Risk
-
-| Risk | Mitigation |
-|------|------------|
-| Lambda cold start performance | Container pool, optimization |
-| DynamoDB Local compatibility | Extensive testing, version pinning |
-| S3 edge cases | Use s3s framework, comprehensive tests |
-
-### Medium Risk
-
-| Risk | Mitigation |
-|------|------------|
-| SigV4 implementation complexity | Use existing crypto crates |
-| Cross-platform Docker issues | CI testing on Linux/macOS/Windows |
-| Memory usage with large objects | Streaming, configurable limits |
-
-### Low Risk
-
-| Risk | Mitigation |
-|------|------------|
-| Rust async complexity | Well-established patterns |
-| JSON/XML serialization | Use serde ecosystem |
 
 ---
 
 ## Success Criteria
 
-### MVP (End of Phase 5)
+### MVP Definition
 
-1. **S3**: Pass 90%+ of basic operation tests
-2. **DynamoDB**: All core CRUD operations working
-3. **Lambda**: Sync invocation with Node.js/Python runtimes
-4. **Performance**: < 100ms cold start for S3/DynamoDB
-5. **Documentation**: Complete user guide
+RustStack MVP is complete when:
+
+1. **S3:** All P0 operations work with correct error codes
+2. **DynamoDB:** All P0 operations work, including expression failures
+3. **Lambda:** Flask app can be invoked with correct API Gateway event format
+4. **Integration:** A sample Flask app using S3 + DynamoDB passes all tests
 
 ### Metrics
 
 | Metric | Target |
 |--------|--------|
-| Test coverage | > 80% |
-| S3 API coverage | 50+ operations |
-| DynamoDB API coverage | 30+ operations |
-| Lambda runtimes | 3+ (Node, Python, Go) |
-| Startup time | < 2 seconds |
-| Memory usage | < 100MB idle |
+| S3 operation coverage | 5 operations (100% of scope) |
+| DynamoDB operation coverage | 8 operations (100% of scope) |
+| Lambda operation coverage | 3 operations (100% of scope) |
+| Error code accuracy | 100% match with AWS |
+| Cold start time | < 500ms |
+| Test pass rate | 100% |
 
 ---
 
-## Post-MVP Roadmap
+## Risk Mitigation
 
-### Phase 6: Additional Services
-- SQS (message queuing)
-- SNS (notifications)
-- EventBridge (event routing)
-- CloudWatch Logs
+### High Risk: DynamoDB Local Compatibility
 
-### Phase 7: Advanced Features
-- Native DynamoDB engine (replace DDB Local)
-- Distributed mode
-- Kubernetes operator
-- Web UI dashboard
+**Risk:** DynamoDB Local may have subtle differences from AWS.
 
-### Phase 8: Ecosystem
-- Terraform provider
-- CDK support
-- VS Code extension
-- CLI tool
+**Mitigation:**
+- Run compatibility tests against both
+- Document known differences
+- Have workaround layer for critical issues
+
+### Medium Risk: Lambda Container Startup
+
+**Risk:** Container cold start too slow for test iteration.
+
+**Mitigation:**
+- Keep containers warm between invocations
+- Pre-pull runtime images
+- Consider hot-reload for development
+
+### Low Risk: s3s Framework Limitations
+
+**Risk:** s3s may not expose all needed customization.
+
+**Mitigation:**
+- Fork if necessary
+- Most S3 behavior is standard HTTP
 
 ---
 
-## Appendix: Priority API Operations
+## Dependencies
 
-### S3 (MVP - 50 operations)
+### Runtime Dependencies
 
-**Must Have:**
-- CreateBucket, DeleteBucket, HeadBucket, ListBuckets
-- PutObject, GetObject, HeadObject, DeleteObject, DeleteObjects
-- CopyObject
-- CreateMultipartUpload, UploadPart, CompleteMultipartUpload, AbortMultipartUpload
-- ListObjects, ListObjectsV2
+| Dependency | Purpose | Notes |
+|------------|---------|-------|
+| tokio | Async runtime | Required |
+| axum | HTTP server | |
+| s3s | S3 framework | Core S3 impl |
+| bollard | Docker API | Lambda containers |
+| DynamoDB Local | DynamoDB engine | Java JAR |
 
-**Should Have:**
-- PutBucketVersioning, GetBucketVersioning
-- ListObjectVersions
-- PutObjectTagging, GetObjectTagging
-- PutBucketTagging, GetBucketTagging
+### Development Dependencies
 
-**Nice to Have:**
-- GetObjectAttributes
-- PutBucketCors, GetBucketCors
-- PutBucketLifecycle, GetBucketLifecycle
+| Dependency | Purpose |
+|------------|---------|
+| aws-sdk-s3 | Testing |
+| aws-sdk-dynamodb | Testing |
+| aws-sdk-lambda | Testing |
 
-### DynamoDB (MVP - 30 operations)
+### External Dependencies
 
-**Must Have:**
-- CreateTable, DeleteTable, DescribeTable, ListTables
-- PutItem, GetItem, UpdateItem, DeleteItem
-- Query, Scan
-- BatchWriteItem, BatchGetItem
+| Dependency | How to Obtain |
+|------------|---------------|
+| Docker | Must be installed |
+| Java 11+ | For DynamoDB Local |
+| DynamoDB Local JAR | Download from AWS |
 
-**Should Have:**
-- TransactWriteItems, TransactGetItems
-- UpdateTable
-- TagResource, UntagResource
+---
 
-**Nice to Have:**
-- DescribeTimeToLive, UpdateTimeToLive
-- CreateGlobalTable (v2019)
+## File Structure (Final)
 
-### Lambda (MVP - 30 operations)
+```
+ruststack/
+├── Cargo.toml
+├── README.md
+├── ruststack/                 # Main binary
+│   └── src/main.rs
+├── ruststack-core/            # Shared types
+│   └── src/{error,account,request_id}.rs
+├── ruststack-auth/            # Auth (minimal for local)
+│   └── src/sigv4.rs
+├── ruststack-s3/              # S3 service
+│   └── src/{service,storage/*}.rs
+├── ruststack-dynamodb/        # DynamoDB proxy
+│   └── src/{proxy,server}.rs
+├── ruststack-lambda/          # Lambda execution
+│   └── src/{service,function,invocation,runtime_api}.rs
+├── tests/
+│   ├── s3/
+│   ├── dynamodb/
+│   └── lambda/
+└── examples/
+    └── flask-app/             # Sample Flask app for testing
+```
 
-**Must Have:**
-- CreateFunction, GetFunction, DeleteFunction
-- UpdateFunctionCode, UpdateFunctionConfiguration
-- Invoke
-- ListFunctions
+---
 
-**Should Have:**
-- PublishVersion, ListVersionsByFunction
-- CreateAlias, GetAlias, DeleteAlias
-- AddPermission, GetPolicy
+## Next Steps
 
-**Nice to Have:**
-- CreateEventSourceMapping
-- PutFunctionConcurrency
-- PublishLayerVersion
+1. **Immediate:** Set up CI/CD with GitHub Actions
+2. **This week:** Complete S3 integration with s3s
+3. **Next week:** DynamoDB Local integration and proxy
+4. **Week 5:** Lambda container execution
+
+The focused scope means we can deliver a production-quality tool in 8 weeks rather than a broad but unreliable one in 16 weeks.

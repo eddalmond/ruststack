@@ -26,6 +26,7 @@ clap.workspace = true
 config.workspace = true
 toml.workspace = true
 serde.workspace = true
+anyhow.workspace = true
 
 [dev-dependencies]
 aws-config.workspace = true
