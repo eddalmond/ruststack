@@ -1,80 +1,127 @@
 //! HTTP router for RustStack services
 
-use crate::server::ServiceRegistry;
 use axum::{
     body::Body,
-    extract::State,
-    http::{HeaderMap, Method, Request, StatusCode},
+    extract::{Path, Query, State},
+    http::{header, HeaderMap, Method, Request, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{any, get},
     Router,
 };
+use bytes::Bytes;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
+use ruststack_s3::{
+    storage::{EphemeralStorage, ObjectStorage},
+    handlers::{self, S3State, ListObjectsQuery},
+};
+
+/// Service state for the main router
+pub struct AppState {
+    s3: Arc<S3State>,
+    s3_enabled: bool,
+    dynamodb_enabled: bool,
+    lambda_enabled: bool,
+}
+
+impl AppState {
+    pub fn new(s3_enabled: bool, dynamodb_enabled: bool, lambda_enabled: bool) -> Self {
+        let storage: Arc<dyn ObjectStorage> = Arc::new(EphemeralStorage::new());
+        Self {
+            s3: Arc::new(S3State { storage }),
+            s3_enabled,
+            dynamodb_enabled,
+            lambda_enabled,
+        }
+    }
+}
+
 /// Create the main application router
-pub fn create_router(services: ServiceRegistry) -> Router {
-    let state = Arc::new(services);
+pub fn create_router(state: AppState) -> Router {
+    let shared_state = Arc::new(state);
 
     Router::new()
         // Health check endpoint
         .route("/health", get(health_check))
         .route("/_localstack/health", get(health_check)) // LocalStack compatibility
-        // S3 routes - catch all for now
-        .route("/", any(handle_request))
-        .route("/*path", any(handle_request))
+        // S3 routes
+        .route("/", any(handle_root))
+        .route("/{bucket}", any(handle_bucket))
+        .route("/{bucket}/{*key}", any(handle_object))
         .layer(TraceLayer::new_for_http())
-        .with_state(state)
+        .with_state(shared_state)
 }
 
 async fn health_check() -> impl IntoResponse {
     (StatusCode::OK, r#"{"status": "running", "services": ["s3", "dynamodb", "lambda"]}"#)
 }
 
-async fn handle_request(
-    State(services): State<Arc<ServiceRegistry>>,
+async fn handle_root(
+    State(state): State<Arc<AppState>>,
     method: Method,
     headers: HeaderMap,
-    request: Request<Body>,
-) -> impl IntoResponse {
-    let path = request.uri().path().to_string();
-    let service = detect_service(&headers, &path);
-
-    info!(
-        method = %method,
-        path = %path,
-        service = %service,
-        "Handling request"
-    );
-
-    match service {
-        "s3" => services.handle_s3(request).await,
-        "dynamodb" => services.handle_dynamodb(request).await,
-        "lambda" => services.handle_lambda(request).await,
-        _ => Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::from("Service not found"))
-            .unwrap(),
-    }
-}
-
-/// Detect which AWS service a request is targeting
-fn detect_service(headers: &HeaderMap, path: &str) -> &'static str {
-    // Check for DynamoDB
+) -> Response {
+    // Check for DynamoDB request
     if let Some(target) = headers.get("x-amz-target") {
         if let Ok(target_str) = target.to_str() {
             if target_str.starts_with("DynamoDB") {
-                return "dynamodb";
+                return handle_dynamodb_stub().await;
             }
         }
     }
 
-    // Check path-based routing
-    if path.starts_with("/2015-03-31/functions") || path.starts_with("/lambda") {
-        return "lambda";
+    // Default to S3 ListBuckets
+    if !state.s3_enabled {
+        return service_disabled("s3");
     }
 
-    // Default to S3 (most common)
-    "s3"
+    handlers::handle_root(State(state.s3.clone()), method).await
+}
+
+async fn handle_bucket(
+    State(state): State<Arc<AppState>>,
+    Path(bucket): Path<String>,
+    method: Method,
+    Query(query): Query<ListObjectsQuery>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !state.s3_enabled {
+        return service_disabled("s3");
+    }
+
+    info!(bucket = %bucket, method = %method, "S3 bucket request");
+    handlers::handle_bucket(State(state.s3.clone()), Path(bucket), method, Query(query), headers, body).await
+}
+
+async fn handle_object(
+    State(state): State<Arc<AppState>>,
+    Path((bucket, key)): Path<(String, String)>,
+    method: Method,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !state.s3_enabled {
+        return service_disabled("s3");
+    }
+
+    info!(bucket = %bucket, key = %key, method = %method, "S3 object request");
+    handlers::handle_object(State(state.s3.clone()), Path((bucket, key)), method, headers, body).await
+}
+
+async fn handle_dynamodb_stub() -> Response {
+    Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
+        .header(header::CONTENT_TYPE, "application/x-amz-json-1.0")
+        .body(Body::from(r#"{"__type":"com.amazonaws.dynamodb.v20120810#ServiceUnavailableException","message":"DynamoDB service is not yet implemented"}"#))
+        .unwrap()
+}
+
+fn service_disabled(service: &str) -> Response {
+    Response::builder()
+        .status(StatusCode::SERVICE_UNAVAILABLE)
+        .body(Body::from(format!("Service '{}' is disabled", service)))
+        .unwrap()
 }

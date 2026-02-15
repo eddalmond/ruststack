@@ -1,0 +1,297 @@
+//! S3 HTTP request handlers
+
+use axum::{
+    body::Body,
+    extract::{Path, Query, State},
+    http::{header, HeaderMap, Method, Request, StatusCode},
+    response::{IntoResponse, Response},
+};
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+use crate::storage::{ObjectMetadata, ObjectStorage, StorageError};
+use crate::xml::{format_error, format_list_buckets, format_list_objects, format_object_result};
+
+/// Shared state for S3 handlers
+pub struct S3State {
+    pub storage: Arc<dyn ObjectStorage>,
+}
+
+/// Query parameters for ListObjects
+#[derive(Debug, Deserialize, Default)]
+pub struct ListObjectsQuery {
+    pub prefix: Option<String>,
+    pub delimiter: Option<String>,
+    #[serde(rename = "continuation-token")]
+    pub continuation_token: Option<String>,
+    #[serde(rename = "max-keys")]
+    pub max_keys: Option<i32>,
+    #[serde(rename = "list-type")]
+    pub list_type: Option<i32>,
+}
+
+/// Handle bucket-level operations
+pub async fn handle_bucket(
+    State(state): State<Arc<S3State>>,
+    Path(bucket): Path<String>,
+    method: Method,
+    Query(query): Query<ListObjectsQuery>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    match method {
+        Method::PUT => create_bucket(state, &bucket, headers).await,
+        Method::DELETE => delete_bucket(state, &bucket).await,
+        Method::HEAD => head_bucket(state, &bucket).await,
+        Method::GET => list_objects(state, &bucket, query).await,
+        _ => method_not_allowed(),
+    }
+}
+
+/// Handle object-level operations
+pub async fn handle_object(
+    State(state): State<Arc<S3State>>,
+    Path((bucket, key)): Path<(String, String)>,
+    method: Method,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    match method {
+        Method::PUT => put_object(state, &bucket, &key, headers, body).await,
+        Method::GET => get_object(state, &bucket, &key, headers).await,
+        Method::DELETE => delete_object(state, &bucket, &key).await,
+        Method::HEAD => head_object(state, &bucket, &key).await,
+        _ => method_not_allowed(),
+    }
+}
+
+/// Handle root-level operations (ListBuckets)
+pub async fn handle_root(
+    State(state): State<Arc<S3State>>,
+    method: Method,
+) -> Response {
+    match method {
+        Method::GET => list_buckets(state).await,
+        _ => method_not_allowed(),
+    }
+}
+
+// === Bucket Operations ===
+
+async fn create_bucket(state: Arc<S3State>, bucket: &str, _headers: HeaderMap) -> Response {
+    match state.storage.create_bucket(bucket).await {
+        Ok(()) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Location", format!("/{}", bucket))
+            .body(Body::empty())
+            .unwrap(),
+        Err(StorageError::BucketAlreadyExists(_)) => Response::builder()
+            .status(StatusCode::CONFLICT)
+            .header(header::CONTENT_TYPE, "application/xml")
+            .body(Body::from(format_error("BucketAlreadyOwnedByYou", "Your previous request to create the named bucket succeeded and you already own it.", bucket)))
+            .unwrap(),
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
+async fn delete_bucket(state: Arc<S3State>, bucket: &str) -> Response {
+    match state.storage.delete_bucket(bucket).await {
+        Ok(()) => Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .body(Body::empty())
+            .unwrap(),
+        Err(StorageError::BucketNotFound(_)) => not_found_error("NoSuchBucket", "The specified bucket does not exist", bucket),
+        Err(StorageError::BucketNotEmpty(_)) => Response::builder()
+            .status(StatusCode::CONFLICT)
+            .header(header::CONTENT_TYPE, "application/xml")
+            .body(Body::from(format_error("BucketNotEmpty", "The bucket you tried to delete is not empty", bucket)))
+            .unwrap(),
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
+async fn head_bucket(state: Arc<S3State>, bucket: &str) -> Response {
+    if state.storage.bucket_exists(bucket).await {
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("x-amz-bucket-region", "us-east-1")
+            .body(Body::empty())
+            .unwrap()
+    } else {
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::empty())
+            .unwrap()
+    }
+}
+
+async fn list_buckets(state: Arc<S3State>) -> Response {
+    match state.storage.list_buckets().await {
+        Ok(buckets) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/xml")
+            .body(Body::from(format_list_buckets(&buckets)))
+            .unwrap(),
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
+async fn list_objects(state: Arc<S3State>, bucket: &str, query: ListObjectsQuery) -> Response {
+    let max_keys = query.max_keys.unwrap_or(1000);
+    
+    match state.storage.list_objects(
+        bucket,
+        query.prefix.as_deref(),
+        query.delimiter.as_deref(),
+        query.continuation_token.as_deref(),
+        max_keys,
+    ).await {
+        Ok(result) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/xml")
+            .body(Body::from(format_list_objects(bucket, &query.prefix, &query.delimiter, &result)))
+            .unwrap(),
+        Err(StorageError::BucketNotFound(_)) => not_found_error("NoSuchBucket", "The specified bucket does not exist", bucket),
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
+// === Object Operations ===
+
+async fn put_object(state: Arc<S3State>, bucket: &str, key: &str, headers: HeaderMap, body: Bytes) -> Response {
+    let metadata = extract_metadata(&headers);
+    
+    match state.storage.put_object(bucket, key, body, metadata).await {
+        Ok(result) => Response::builder()
+            .status(StatusCode::OK)
+            .header("ETag", &result.etag)
+            .body(Body::empty())
+            .unwrap(),
+        Err(StorageError::BucketNotFound(_)) => not_found_error("NoSuchBucket", "The specified bucket does not exist", bucket),
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
+async fn get_object(state: Arc<S3State>, bucket: &str, key: &str, headers: HeaderMap) -> Response {
+    match state.storage.get_object(bucket, key, None).await {
+        Ok(obj) => {
+            let mut builder = Response::builder()
+                .status(StatusCode::OK)
+                .header("ETag", &obj.etag)
+                .header("Content-Length", obj.size.to_string())
+                .header("Last-Modified", obj.last_modified.format("%a, %d %b %Y %H:%M:%S GMT").to_string());
+            
+            if let Some(ct) = &obj.metadata.content_type {
+                builder = builder.header(header::CONTENT_TYPE, ct);
+            } else {
+                builder = builder.header(header::CONTENT_TYPE, "application/octet-stream");
+            }
+            
+            builder.body(Body::from(obj.data)).unwrap()
+        }
+        Err(StorageError::BucketNotFound(_)) => not_found_error("NoSuchBucket", "The specified bucket does not exist", bucket),
+        Err(StorageError::ObjectNotFound { .. }) => not_found_error("NoSuchKey", "The specified key does not exist.", key),
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
+async fn delete_object(state: Arc<S3State>, bucket: &str, key: &str) -> Response {
+    match state.storage.delete_object(bucket, key, None).await {
+        Ok(_) => Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .body(Body::empty())
+            .unwrap(),
+        Err(StorageError::BucketNotFound(_)) => not_found_error("NoSuchBucket", "The specified bucket does not exist", bucket),
+        Err(e) => internal_error(&e.to_string()),
+    }
+}
+
+async fn head_object(state: Arc<S3State>, bucket: &str, key: &str) -> Response {
+    match state.storage.get_object(bucket, key, None).await {
+        Ok(obj) => {
+            let mut builder = Response::builder()
+                .status(StatusCode::OK)
+                .header("ETag", &obj.etag)
+                .header("Content-Length", obj.size.to_string())
+                .header("Last-Modified", obj.last_modified.format("%a, %d %b %Y %H:%M:%S GMT").to_string());
+            
+            if let Some(ct) = &obj.metadata.content_type {
+                builder = builder.header(header::CONTENT_TYPE, ct);
+            }
+            
+            builder.body(Body::empty()).unwrap()
+        }
+        Err(StorageError::BucketNotFound(_)) => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::empty())
+            .unwrap(),
+        Err(StorageError::ObjectNotFound { .. }) => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::empty())
+            .unwrap(),
+        Err(_) => Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::empty())
+            .unwrap(),
+    }
+}
+
+// === Helper Functions ===
+
+fn extract_metadata(headers: &HeaderMap) -> ObjectMetadata {
+    let mut metadata = ObjectMetadata::default();
+    
+    if let Some(ct) = headers.get(header::CONTENT_TYPE) {
+        metadata.content_type = ct.to_str().ok().map(String::from);
+    }
+    if let Some(ce) = headers.get(header::CONTENT_ENCODING) {
+        metadata.content_encoding = ce.to_str().ok().map(String::from);
+    }
+    if let Some(cd) = headers.get(header::CONTENT_DISPOSITION) {
+        metadata.content_disposition = cd.to_str().ok().map(String::from);
+    }
+    if let Some(cl) = headers.get(header::CONTENT_LANGUAGE) {
+        metadata.content_language = cl.to_str().ok().map(String::from);
+    }
+    if let Some(cc) = headers.get(header::CACHE_CONTROL) {
+        metadata.cache_control = cc.to_str().ok().map(String::from);
+    }
+    
+    // Extract x-amz-meta-* headers
+    for (key, value) in headers.iter() {
+        let key_str = key.as_str().to_lowercase();
+        if key_str.starts_with("x-amz-meta-") {
+            if let Ok(v) = value.to_str() {
+                let meta_key = key_str.strip_prefix("x-amz-meta-").unwrap().to_string();
+                metadata.user_metadata.insert(meta_key, v.to_string());
+            }
+        }
+    }
+    
+    metadata
+}
+
+fn method_not_allowed() -> Response {
+    Response::builder()
+        .status(StatusCode::METHOD_NOT_ALLOWED)
+        .header(header::CONTENT_TYPE, "application/xml")
+        .body(Body::from(format_error("MethodNotAllowed", "The specified method is not allowed against this resource.", "")))
+        .unwrap()
+}
+
+fn not_found_error(code: &str, message: &str, resource: &str) -> Response {
+    Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .header(header::CONTENT_TYPE, "application/xml")
+        .body(Body::from(format_error(code, message, resource)))
+        .unwrap()
+}
+
+fn internal_error(message: &str) -> Response {
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .header(header::CONTENT_TYPE, "application/xml")
+        .body(Body::from(format_error("InternalError", message, "")))
+        .unwrap()
+}

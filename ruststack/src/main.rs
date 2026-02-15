@@ -5,7 +5,6 @@
 
 mod config;
 mod router;
-mod server;
 
 use clap::Parser;
 use std::net::SocketAddr;
@@ -53,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("ruststack={}", args.log_level).into()),
+                .unwrap_or_else(|_| format!("ruststack={},tower_http=debug", args.log_level).into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -70,10 +69,10 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Build services
-    let services = server::ServiceRegistry::new(args.s3, args.dynamodb, args.lambda);
+    let state = router::AppState::new(args.s3, args.dynamodb, args.lambda);
 
     // Create router
-    let app = router::create_router(services);
+    let app = router::create_router(state);
 
     // Start server
     let addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;
