@@ -42,7 +42,7 @@ impl<T> StateStore<T> {
         &self,
         account_id: &str,
         region: &str,
-    ) -> dashmap::mapref::one::RefMut<AccountRegionKey, T>
+    ) -> dashmap::mapref::one::RefMut<'_, AccountRegionKey, T>
     where
         T: Default,
     {
@@ -55,7 +55,7 @@ impl<T> StateStore<T> {
         &self,
         account_id: &str,
         region: &str,
-    ) -> Option<dashmap::mapref::one::Ref<AccountRegionKey, T>> {
+    ) -> Option<dashmap::mapref::one::Ref<'_, AccountRegionKey, T>> {
         let key = AccountRegionKey::new(account_id, region);
         self.data.get(&key)
     }
