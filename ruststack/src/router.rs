@@ -83,30 +83,30 @@ pub fn create_router(state: AppState) -> Router {
         // Create function
         .route("/2015-03-31/functions", post(create_function))
         // Get function
-        .route("/2015-03-31/functions/{function_name}", get(get_function))
+        .route("/2015-03-31/functions/:function_name", get(get_function))
         // Delete function
         .route(
-            "/2015-03-31/functions/{function_name}",
+            "/2015-03-31/functions/:function_name",
             delete(delete_function),
         )
         // Get function configuration
         .route(
-            "/2015-03-31/functions/{function_name}/configuration",
+            "/2015-03-31/functions/:function_name/configuration",
             get(get_function_configuration),
         )
         // Update function configuration
         .route(
-            "/2015-03-31/functions/{function_name}/configuration",
+            "/2015-03-31/functions/:function_name/configuration",
             put(update_function_configuration),
         )
         // Update function code
         .route(
-            "/2015-03-31/functions/{function_name}/code",
+            "/2015-03-31/functions/:function_name/code",
             put(update_function_code),
         )
         // Invoke function
         .route(
-            "/2015-03-31/functions/{function_name}/invocations",
+            "/2015-03-31/functions/:function_name/invocations",
             post(invoke_function),
         );
 
@@ -118,8 +118,8 @@ pub fn create_router(state: AppState) -> Router {
         .merge(lambda_routes)
         // S3 routes (catch-all)
         .route("/", any(handle_root))
-        .route("/{bucket}", any(handle_bucket))
-        .route("/{bucket}/*key", any(handle_object))
+        .route("/:bucket", any(handle_bucket))
+        .route("/:bucket/*key", any(handle_object))
         .layer(middleware::from_fn(add_request_id))
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state)
