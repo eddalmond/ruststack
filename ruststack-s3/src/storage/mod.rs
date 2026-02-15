@@ -3,6 +3,9 @@
 mod ephemeral;
 mod traits;
 
+#[cfg(test)]
+mod tests;
+
 pub use ephemeral::EphemeralStorage;
 pub use traits::{
     ObjectStorage, StorageError, StoredObject, ObjectMetadata,

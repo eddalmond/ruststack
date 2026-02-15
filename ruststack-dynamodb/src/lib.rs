@@ -8,6 +8,12 @@ pub mod proxy;
 pub mod server;
 pub mod storage;
 
+#[cfg(test)]
+mod storage_tests;
+
+#[cfg(test)]
+mod expression_tests;
+
 pub use expression::{ExpressionContext, ExpressionError};
 pub use handlers::DynamoDBState;
 pub use storage::{DynamoDBError, DynamoDBStorage};
