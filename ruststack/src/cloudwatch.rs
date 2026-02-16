@@ -214,6 +214,12 @@ struct PutLogEventsRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct DeleteLogGroupRequest {
+    log_group_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct InputLogEvent {
     timestamp: i64,
     message: String,
@@ -257,6 +263,7 @@ pub async fn handle_logs_request(
         "CreateLogGroup" => handle_create_log_group(&state, body_json),
         "CreateLogStream" => handle_create_log_stream(&state, body_json),
         "PutLogEvents" => handle_put_log_events(&state, body_json),
+        "DeleteLogGroup" => handle_delete_log_group(&state, body_json),
         _ => error_response(
             "UnknownOperationException",
             &format!("Unknown operation: {}", action),
@@ -583,6 +590,28 @@ fn handle_put_log_events(state: &CloudWatchLogsState, body: serde_json::Value) -
     json_response(PutLogEventsResponse {
         next_sequence_token: next_token,
     })
+}
+
+fn handle_delete_log_group(state: &CloudWatchLogsState, body: serde_json::Value) -> Response {
+    let req: DeleteLogGroupRequest = match serde_json::from_value(body) {
+        Ok(r) => r,
+        Err(e) => return error_response("InvalidParameterException", &e.to_string()),
+    };
+
+    match state.log_groups.remove(&req.log_group_name) {
+        Some(_) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/x-amz-json-1.1")
+            .body(Body::from("{}"))
+            .unwrap(),
+        None => error_response(
+            "ResourceNotFoundException",
+            &format!(
+                "The specified log group does not exist: {}",
+                req.log_group_name
+            ),
+        ),
+    }
 }
 
 fn json_response<T: Serialize>(body: T) -> Response {

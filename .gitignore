@@ -5,3 +5,5 @@ Cargo.lock
 *.jar
 .idea/
 .vscode/
+__pycache__/
+.venv/

@@ -222,3 +222,158 @@ def logs_client(ruststack_endpoint: str):
         aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         region_name=AWS_REGION,
     )
+
+
+# ============================================
+# Secrets Manager Fixtures
+# ============================================
+
+@pytest.fixture(scope="session")
+def secretsmanager_client(ruststack_endpoint: str):
+    """Session-scoped Secrets Manager client."""
+    return boto3.client(
+        "secretsmanager",
+        endpoint_url=ruststack_endpoint,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION,
+    )
+
+
+@pytest.fixture
+def secret(secretsmanager_client) -> Generator[str, None, None]:
+    """Function-scoped secret (created and cleaned up per test)."""
+    import uuid
+    secret_name = f"test-secret-{uuid.uuid4().hex[:8]}"
+    secretsmanager_client.create_secret(
+        Name=secret_name,
+        SecretString='{"username": "admin", "password": "secret123"}'
+    )
+    yield secret_name
+    try:
+        secretsmanager_client.delete_secret(
+            SecretId=secret_name,
+            ForceDeleteWithoutRecovery=True
+        )
+    except Exception:
+        pass
+
+
+# ============================================
+# IAM Fixtures
+# ============================================
+
+@pytest.fixture(scope="session")
+def iam_client(ruststack_endpoint: str):
+    """Session-scoped IAM client."""
+    return boto3.client(
+        "iam",
+        endpoint_url=ruststack_endpoint,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION,
+    )
+
+
+@pytest.fixture
+def iam_role(iam_client) -> Generator[str, None, None]:
+    """Function-scoped IAM role."""
+    import uuid
+    role_name = f"test-role-{uuid.uuid4().hex[:8]}"
+    assume_role_policy = '''{
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Action": "sts:AssumeRole"
+        }]
+    }'''
+    iam_client.create_role(
+        RoleName=role_name,
+        AssumeRolePolicyDocument=assume_role_policy
+    )
+    yield role_name
+    try:
+        # Detach all policies first
+        attached = iam_client.list_attached_role_policies(RoleName=role_name)
+        for policy in attached.get("AttachedPolicies", []):
+            iam_client.detach_role_policy(
+                RoleName=role_name,
+                PolicyArn=policy["PolicyArn"]
+            )
+        iam_client.delete_role(RoleName=role_name)
+    except Exception:
+        pass
+
+
+# ============================================
+# API Gateway V2 Fixtures
+# ============================================
+
+@pytest.fixture(scope="session")
+def apigatewayv2_client(ruststack_endpoint: str):
+    """Session-scoped API Gateway V2 client."""
+    return boto3.client(
+        "apigatewayv2",
+        endpoint_url=ruststack_endpoint,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION,
+    )
+
+
+@pytest.fixture
+def http_api(apigatewayv2_client) -> Generator[str, None, None]:
+    """Function-scoped HTTP API."""
+    import uuid
+    api_name = f"test-api-{uuid.uuid4().hex[:8]}"
+    response = apigatewayv2_client.create_api(
+        Name=api_name,
+        ProtocolType="HTTP"
+    )
+    api_id = response["ApiId"]
+    yield api_id
+    try:
+        apigatewayv2_client.delete_api(ApiId=api_id)
+    except Exception:
+        pass
+
+
+# ============================================
+# Kinesis Firehose Fixtures
+# ============================================
+
+@pytest.fixture(scope="session")
+def firehose_client(ruststack_endpoint: str):
+    """Session-scoped Kinesis Firehose client."""
+    return boto3.client(
+        "firehose",
+        endpoint_url=ruststack_endpoint,
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION,
+    )
+
+
+@pytest.fixture
+def delivery_stream(firehose_client, s3_bucket) -> Generator[str, None, None]:
+    """Function-scoped Firehose delivery stream."""
+    import uuid
+    stream_name = f"test-stream-{uuid.uuid4().hex[:8]}"
+    firehose_client.create_delivery_stream(
+        DeliveryStreamName=stream_name,
+        DeliveryStreamType="DirectPut",
+        ExtendedS3DestinationConfiguration={
+            "BucketARN": f"arn:aws:s3:::{s3_bucket}",
+            "RoleARN": "arn:aws:iam::000000000000:role/firehose-role",
+            "BufferingHints": {
+                "SizeInMBs": 1,
+                "IntervalInSeconds": 60
+            }
+        }
+    )
+    yield stream_name
+    try:
+        firehose_client.delete_delivery_stream(DeliveryStreamName=stream_name)
+    except Exception:
+        pass

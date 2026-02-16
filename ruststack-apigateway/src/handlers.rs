@@ -87,7 +87,7 @@ pub async fn handle_request(
 // === Request/Response types ===
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 struct CreateApiRequest {
     name: String,
     protocol_type: String,
@@ -97,7 +97,7 @@ struct CreateApiRequest {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 struct ApiResponse {
     api_id: String,
     name: String,
@@ -109,7 +109,7 @@ struct ApiResponse {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 struct CreateRouteRequest {
     route_key: String,
@@ -118,7 +118,7 @@ struct CreateRouteRequest {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 struct RouteResponse {
     route_id: String,
     route_key: String,
@@ -129,7 +129,7 @@ struct RouteResponse {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 struct CreateIntegrationRequest {
     integration_type: String,
     integration_uri: Option<String>,
@@ -138,7 +138,7 @@ struct CreateIntegrationRequest {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 struct IntegrationResponse {
     integration_id: String,
     integration_type: String,
@@ -150,7 +150,7 @@ struct IntegrationResponse {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 struct CreateStageRequest {
     stage_name: String,
     #[serde(default)]
@@ -159,7 +159,7 @@ struct CreateStageRequest {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "PascalCase")]
+#[serde(rename_all = "camelCase")]
 struct StageResponse {
     stage_name: String,
     auto_deploy: bool,
@@ -246,7 +246,7 @@ async fn handle_list_apis(state: Arc<ApiGatewayState>) -> Response {
         })
         .collect();
 
-    let response = serde_json::json!({ "Items": items });
+    let response = serde_json::json!({ "items": items });
     json_response(StatusCode::OK, &response)
 }
 
@@ -334,7 +334,7 @@ async fn handle_list_routes(state: Arc<ApiGatewayState>, api_id: &str) -> Respon
         })
         .collect();
 
-    let response = serde_json::json!({ "Items": items });
+    let response = serde_json::json!({ "items": items });
     json_response(StatusCode::OK, &response)
 }
 
@@ -436,7 +436,7 @@ async fn handle_list_integrations(state: Arc<ApiGatewayState>, api_id: &str) -> 
         })
         .collect();
 
-    let response = serde_json::json!({ "Items": items });
+    let response = serde_json::json!({ "items": items });
     json_response(StatusCode::OK, &response)
 }
 
@@ -524,7 +524,7 @@ async fn handle_list_stages(state: Arc<ApiGatewayState>, api_id: &str) -> Respon
         })
         .collect();
 
-    let response = serde_json::json!({ "Items": items });
+    let response = serde_json::json!({ "items": items });
     json_response(StatusCode::OK, &response)
 }
 
