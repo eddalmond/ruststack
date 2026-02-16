@@ -20,6 +20,8 @@ A high-fidelity AWS local emulator written in Rust. Drop-in replacement for Loca
 | **DynamoDB** | Tables, items, query, scan, batch ops | Full expression support |
 | **Lambda** | CRUD, invoke, environment vars | Python subprocess execution |
 | **CloudWatch Logs** | Groups, streams, events | For Lambda log retrieval |
+| **Secrets Manager** | Create, get, put, delete, list | Version stages (AWSCURRENT/AWSPREVIOUS) |
+| **IAM** | Roles, policies, attachments | Stub implementation (no enforcement) |
 
 ## Quick Start
 
@@ -187,6 +189,17 @@ curl http://localhost:4566/_localstack/health
 - DescribeLogGroups, DescribeLogStreams
 - PutLogEvents, GetLogEvents
 
+### Secrets Manager
+- CreateSecret, GetSecretValue, PutSecretValue
+- DeleteSecret, DescribeSecret, ListSecrets
+- Version stages: AWSCURRENT, AWSPREVIOUS
+
+### IAM (Stub)
+- CreateRole, GetRole, DeleteRole, ListRoles
+- CreatePolicy, GetPolicy, DeletePolicy
+- AttachRolePolicy, DetachRolePolicy, ListAttachedRolePolicies
+- Note: IAM is a stub — policies are stored but not enforced
+
 ## Docker
 
 ```dockerfile
@@ -225,8 +238,8 @@ docker run -p 4566:4566 ruststack
 
 ## Project Stats
 
-- **~13,600 lines** of Rust
-- **220+ tests** with comprehensive coverage
+- **~15,000 lines** of Rust
+- **230+ tests** with comprehensive coverage
 - **CI/CD** via GitHub Actions
 
 ## Releases

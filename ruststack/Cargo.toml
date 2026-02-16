@@ -11,6 +11,8 @@ ruststack-auth = { path = "../ruststack-auth" }
 ruststack-s3 = { path = "../ruststack-s3" }
 ruststack-dynamodb = { path = "../ruststack-dynamodb" }
 ruststack-lambda = { path = "../ruststack-lambda" }
+ruststack-secretsmanager = { path = "../ruststack-secretsmanager" }
+ruststack-iam = { path = "../ruststack-iam" }
 
 tokio.workspace = true
 axum.workspace = true

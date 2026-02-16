@@ -97,37 +97,45 @@ RustStack has achieved its MVP milestone. This document tracks what's been imple
 
 | Metric | Value |
 |--------|-------|
-| Lines of Rust | ~13,600 |
-| Test count | 220+ |
-| Crates | 7 |
+| Lines of Rust | ~15,000 |
+| Test count | 230+ |
+| Crates | 9 |
 | CI status | ✅ Green |
 
 ---
 
 ## Future Roadmap
 
-### Phase 5: Persistence (Next)
+### Phase 5: Secrets Manager & IAM ✅
+
+- [x] Secrets Manager (CreateSecret, GetSecretValue, PutSecretValue, DeleteSecret, DescribeSecret, ListSecrets)
+- [x] Secret versioning (AWSCURRENT, AWSPREVIOUS)
+- [x] IAM roles (CreateRole, GetRole, DeleteRole, ListRoles)
+- [x] IAM policies (CreatePolicy, GetPolicy, DeletePolicy)
+- [x] Role-policy attachment (AttachRolePolicy, DetachRolePolicy, ListAttachedRolePolicies)
+
+### Phase 6: Persistence
 
 - [ ] File-system storage backend for S3
 - [ ] SQLite storage backend for DynamoDB
 - [ ] `--data-dir` CLI option
 - [ ] State recovery on restart
 
-### Phase 6: Enhanced Lambda
+### Phase 7: Enhanced Lambda
 
 - [ ] Docker container execution (alternative to subprocess)
 - [ ] Node.js runtime support
 - [ ] Lambda layers
 - [ ] Provisioned concurrency simulation
 
-### Phase 7: Additional Services
+### Phase 8: Additional Services
 
 - [ ] SQS (queues, messages)
 - [ ] SNS (topics, subscriptions)
-- [ ] Secrets Manager (basic secret storage)
-- [ ] API Gateway (local HTTP routing to Lambda)
+- [ ] API Gateway (REST API + Lambda integration)
+- [ ] Kinesis Firehose (delivery streams)
 
-### Phase 8: Performance & Production
+### Phase 9: Performance & Production
 
 - [ ] Benchmarks vs LocalStack
 - [ ] Memory optimization
@@ -140,17 +148,16 @@ RustStack has achieved its MVP milestone. This document tracks what's been imple
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                 HTTP Gateway (Axum)                      │
-│                   Port 4566                              │
-│  Routes: /health, S3 (path/host), DynamoDB, Lambda, Logs│
-└────────┬──────────┬──────────┬──────────┬──────────────┘
-         │          │          │          │
-   ┌─────▼────┐ ┌───▼────┐ ┌───▼────┐ ┌───▼─────┐
-   │    S3    │ │DynamoDB│ │ Lambda │ │  Logs   │
-   │ Storage  │ │ Tables │ │Functions│ │ Groups  │
-   │(DashMap) │ │(DashMap)│ │(DashMap)│ │(DashMap)│
-   └──────────┘ └────────┘ └────────┘ └─────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                       HTTP Gateway (Axum)                             │
+│                          Port 4566                                    │
+│  Routes: /health, S3, DynamoDB, Lambda, Logs, SecretsManager, IAM    │
+└───┬──────┬──────┬──────┬──────┬──────────────┬───────────────────────┘
+    │      │      │      │      │              │
+┌───▼──┐┌──▼───┐┌─▼────┐┌▼────┐┌▼───────────┐┌─▼──┐
+│  S3  ││Dynamo││Lambda││Logs ││SecretsMan. ││IAM │
+│      ││  DB  ││      ││     ││            ││    │
+└──────┘└──────┘└──────┘└─────┘└────────────┘└────┘
 ```
 
 ---
@@ -159,13 +166,15 @@ RustStack has achieved its MVP milestone. This document tracks what's been imple
 
 ```
 ruststack/
-├── ruststack/           # Main binary, HTTP routing
-├── ruststack-core/      # Shared types, errors, request IDs
-├── ruststack-auth/      # SigV4 verification (scaffolded)
-├── ruststack-s3/        # S3 service + storage backends
-├── ruststack-dynamodb/  # DynamoDB service + expression parser
-├── ruststack-lambda/    # Lambda service + invocation
-└── tests/               # Integration tests
+├── ruststack/              # Main binary, HTTP routing
+├── ruststack-core/         # Shared types, errors, request IDs
+├── ruststack-auth/         # SigV4 verification (scaffolded)
+├── ruststack-s3/           # S3 service + storage backends
+├── ruststack-dynamodb/     # DynamoDB service + expression parser
+├── ruststack-lambda/       # Lambda service + invocation
+├── ruststack-secretsmanager/ # Secrets Manager service
+├── ruststack-iam/          # IAM roles & policies (stub)
+└── tests/                  # Integration tests
 ```
 
 ---

@@ -15,6 +15,7 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 
 use ruststack_dynamodb::{handlers as dynamodb_handlers, DynamoDBState, DynamoDBStorage};
+use ruststack_iam::{handlers as iam_handlers, IamState};
 use ruststack_lambda::{
     handlers::{
         self as lambda_handlers, CreateFunctionRequest, ListFunctionsQuery,
@@ -26,6 +27,7 @@ use ruststack_s3::{
     handlers::{self, ListObjectsQuery, S3State},
     storage::{EphemeralStorage, ObjectStorage},
 };
+use ruststack_secretsmanager::{handlers as secrets_handlers, SecretsManagerState};
 
 use crate::cloudwatch::{self, CloudWatchLogsState};
 
@@ -35,6 +37,8 @@ pub struct AppState {
     dynamodb: Arc<DynamoDBState>,
     lambda: Arc<LambdaState>,
     cloudwatch_logs: Arc<CloudWatchLogsState>,
+    secretsmanager: Arc<SecretsManagerState>,
+    iam: Arc<IamState>,
     s3_enabled: bool,
     dynamodb_enabled: bool,
     lambda_enabled: bool,
@@ -51,6 +55,8 @@ impl AppState {
             }),
             lambda: Arc::new(LambdaState::new()),
             cloudwatch_logs,
+            secretsmanager: Arc::new(SecretsManagerState::new()),
+            iam: Arc::new(IamState::new()),
             s3_enabled,
             dynamodb_enabled,
             lambda_enabled,
@@ -126,7 +132,7 @@ async fn health_check() -> Response {
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(
-            r#"{"status": "running", "services": {"s3": "available", "dynamodb": "available", "lambda": "available", "logs": "available"}}"#,
+            r#"{"status": "running", "services": {"s3": "available", "dynamodb": "available", "lambda": "available", "logs": "available", "secretsmanager": "available", "iam": "available"}}"#,
         ))
         .unwrap()
 }
@@ -264,6 +270,44 @@ async fn handle_root(
                     body,
                 )
                 .await;
+            }
+            // Secrets Manager
+            if target_str.starts_with("secretsmanager") {
+                return secrets_handlers::handle_request(
+                    State(state.secretsmanager.clone()),
+                    headers,
+                    body,
+                )
+                .await;
+            }
+        }
+    }
+
+    // Check for IAM request (uses Action parameter in body, not X-Amz-Target)
+    // IAM typically uses POST with Content-Type: application/x-www-form-urlencoded
+    if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
+        if let Ok(ct) = content_type.to_str() {
+            if ct.contains("x-www-form-urlencoded") {
+                // Check if body contains Action=Create/Get/Delete/List/Attach (IAM actions)
+                let body_str = String::from_utf8_lossy(&body);
+                if body_str.contains("Action=CreateRole")
+                    || body_str.contains("Action=GetRole")
+                    || body_str.contains("Action=DeleteRole")
+                    || body_str.contains("Action=ListRoles")
+                    || body_str.contains("Action=CreatePolicy")
+                    || body_str.contains("Action=GetPolicy")
+                    || body_str.contains("Action=DeletePolicy")
+                    || body_str.contains("Action=AttachRolePolicy")
+                    || body_str.contains("Action=DetachRolePolicy")
+                    || body_str.contains("Action=ListAttachedRolePolicies")
+                {
+                    return iam_handlers::handle_request(
+                        State(state.iam.clone()),
+                        headers,
+                        body,
+                    )
+                    .await;
+                }
             }
         }
     }
