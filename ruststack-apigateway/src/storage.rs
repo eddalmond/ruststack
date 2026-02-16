@@ -23,7 +23,7 @@ pub struct Api {
 pub struct Route {
     pub route_id: String,
     pub api_id: String,
-    pub route_key: String, // e.g., "GET /items", "$default"
+    pub route_key: String,      // e.g., "GET /items", "$default"
     pub target: Option<String>, // e.g., "integrations/abc123"
     pub authorization_type: Option<String>,
 }
@@ -33,7 +33,7 @@ pub struct Route {
 pub struct Integration {
     pub integration_id: String,
     pub api_id: String,
-    pub integration_type: String, // AWS_PROXY, HTTP_PROXY
+    pub integration_type: String,        // AWS_PROXY, HTTP_PROXY
     pub integration_uri: Option<String>, // Lambda ARN or HTTP URL
     pub integration_method: Option<String>,
     pub payload_format_version: String, // "1.0" or "2.0"
@@ -77,7 +77,10 @@ impl ApiGatewayStorage {
             api_id: api_id.clone(),
             name: name.to_string(),
             protocol_type: protocol_type.to_string(),
-            api_endpoint: format!("https://{}.execute-api.us-east-1.localhost.localstack.cloud:4566", api_id),
+            api_endpoint: format!(
+                "https://{}.execute-api.us-east-1.localhost.localstack.cloud:4566",
+                api_id
+            ),
             created_date: Utc::now(),
             description,
             tags,
@@ -92,9 +95,12 @@ impl ApiGatewayStorage {
 
     pub fn delete_api(&self, api_id: &str) -> Option<Api> {
         // Also delete associated routes, integrations, stages
-        self.routes.retain(|k, _| !k.starts_with(&format!("{}/", api_id)));
-        self.integrations.retain(|k, _| !k.starts_with(&format!("{}/", api_id)));
-        self.stages.retain(|k, _| !k.starts_with(&format!("{}/", api_id)));
+        self.routes
+            .retain(|k, _| !k.starts_with(&format!("{}/", api_id)));
+        self.integrations
+            .retain(|k, _| !k.starts_with(&format!("{}/", api_id)));
+        self.stages
+            .retain(|k, _| !k.starts_with(&format!("{}/", api_id)));
         self.apis.remove(api_id).map(|(_, v)| v)
     }
 
@@ -104,7 +110,12 @@ impl ApiGatewayStorage {
 
     // === Routes ===
 
-    pub fn create_route(&self, api_id: &str, route_key: &str, target: Option<String>) -> Option<Route> {
+    pub fn create_route(
+        &self,
+        api_id: &str,
+        route_key: &str,
+        target: Option<String>,
+    ) -> Option<Route> {
         if !self.apis.contains_key(api_id) {
             return None;
         }
@@ -253,6 +264,7 @@ impl Default for ApiGatewayState {
 
 /// API Gateway errors
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub enum ApiGatewayError {
     #[error("API not found: {0}")]
     ApiNotFound(String),
@@ -278,7 +290,7 @@ mod tests {
     fn test_create_api() {
         let storage = ApiGatewayStorage::new();
         let api = storage.create_api("TestAPI", "HTTP", None, HashMap::new());
-        
+
         assert_eq!(api.name, "TestAPI");
         assert_eq!(api.protocol_type, "HTTP");
         assert!(!api.api_id.is_empty());
@@ -288,15 +300,25 @@ mod tests {
     fn test_create_route_and_integration() {
         let storage = ApiGatewayStorage::new();
         let api = storage.create_api("TestAPI", "HTTP", None, HashMap::new());
-        
+
         let integration = storage
-            .create_integration(&api.api_id, "AWS_PROXY", Some("arn:aws:lambda:...".to_string()), None, None)
+            .create_integration(
+                &api.api_id,
+                "AWS_PROXY",
+                Some("arn:aws:lambda:...".to_string()),
+                None,
+                None,
+            )
             .unwrap();
-        
+
         let route = storage
-            .create_route(&api.api_id, "GET /test", Some(format!("integrations/{}", integration.integration_id)))
+            .create_route(
+                &api.api_id,
+                "GET /test",
+                Some(format!("integrations/{}", integration.integration_id)),
+            )
             .unwrap();
-        
+
         assert_eq!(route.route_key, "GET /test");
         assert!(route.target.unwrap().contains(&integration.integration_id));
     }
@@ -308,9 +330,9 @@ mod tests {
         storage.create_route(&api.api_id, "GET /", None);
         storage.create_integration(&api.api_id, "AWS_PROXY", None, None, None);
         storage.create_stage(&api.api_id, "$default", true, None);
-        
+
         storage.delete_api(&api.api_id);
-        
+
         assert!(storage.list_routes(&api.api_id).is_empty());
         assert!(storage.list_integrations(&api.api_id).is_empty());
         assert!(storage.list_stages(&api.api_id).is_empty());

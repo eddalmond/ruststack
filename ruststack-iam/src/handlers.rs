@@ -7,7 +7,6 @@ use axum::{
     response::Response,
 };
 use bytes::Bytes;
-use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -57,7 +56,13 @@ pub async fn handle_request(
 async fn handle_create_role(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
     let role_name = match params.get("RoleName") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "RoleName is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "RoleName is required",
+            )
+        }
     };
     let assume_role_policy = params
         .get("AssumeRolePolicyDocument")
@@ -66,7 +71,10 @@ async fn handle_create_role(state: Arc<IamState>, params: HashMap<String, String
     let description = params.get("Description").cloned();
     let path = params.get("Path").cloned();
 
-    match state.storage.create_role(role_name, assume_role_policy, description, path) {
+    match state
+        .storage
+        .create_role(role_name, assume_role_policy, description, path)
+    {
         Ok(role) => {
             let xml = format!(
                 r#"<CreateRoleResponse xmlns="https://iam.amazonaws.com/doc/2010-05-08/">
@@ -92,17 +100,29 @@ async fn handle_create_role(state: Arc<IamState>, params: HashMap<String, String
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::EntityAlreadyExists(name)) => {
-            error_response(StatusCode::CONFLICT, "EntityAlreadyExists", &format!("Role {} already exists", name))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::EntityAlreadyExists(name)) => error_response(
+            StatusCode::CONFLICT,
+            "EntityAlreadyExists",
+            &format!("Role {} already exists", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_get_role(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
     let role_name = match params.get("RoleName") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "RoleName is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "RoleName is required",
+            )
+        }
     };
 
     match state.storage.get_role(role_name) {
@@ -131,17 +151,29 @@ async fn handle_get_role(state: Arc<IamState>, params: HashMap<String, String>) 
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::NoSuchEntity(name)) => {
-            error_response(StatusCode::NOT_FOUND, "NoSuchEntity", &format!("Role {} not found", name))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::NoSuchEntity(name)) => error_response(
+            StatusCode::NOT_FOUND,
+            "NoSuchEntity",
+            &format!("Role {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_delete_role(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
     let role_name = match params.get("RoleName") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "RoleName is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "RoleName is required",
+            )
+        }
     };
 
     match state.storage.delete_role(role_name) {
@@ -156,10 +188,16 @@ async fn handle_delete_role(state: Arc<IamState>, params: HashMap<String, String
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::NoSuchEntity(name)) => {
-            error_response(StatusCode::NOT_FOUND, "NoSuchEntity", &format!("Role {} not found", name))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::NoSuchEntity(name)) => error_response(
+            StatusCode::NOT_FOUND,
+            "NoSuchEntity",
+            &format!("Role {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 
@@ -207,7 +245,13 @@ async fn handle_list_roles(state: Arc<IamState>) -> Response {
 async fn handle_create_policy(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
     let policy_name = match params.get("PolicyName") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "PolicyName is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "PolicyName is required",
+            )
+        }
     };
     let policy_document = params
         .get("PolicyDocument")
@@ -216,7 +260,10 @@ async fn handle_create_policy(state: Arc<IamState>, params: HashMap<String, Stri
     let description = params.get("Description").cloned();
     let path = params.get("Path").cloned();
 
-    match state.storage.create_policy(policy_name, policy_document, description, path) {
+    match state
+        .storage
+        .create_policy(policy_name, policy_document, description, path)
+    {
         Ok(policy) => {
             let xml = format!(
                 r#"<CreatePolicyResponse xmlns="https://iam.amazonaws.com/doc/2010-05-08/">
@@ -244,17 +291,29 @@ async fn handle_create_policy(state: Arc<IamState>, params: HashMap<String, Stri
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::EntityAlreadyExists(name)) => {
-            error_response(StatusCode::CONFLICT, "EntityAlreadyExists", &format!("Policy {} already exists", name))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::EntityAlreadyExists(name)) => error_response(
+            StatusCode::CONFLICT,
+            "EntityAlreadyExists",
+            &format!("Policy {} already exists", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_get_policy(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
     let policy_arn = match params.get("PolicyArn") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "PolicyArn is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "PolicyArn is required",
+            )
+        }
     };
 
     match state.storage.get_policy(policy_arn) {
@@ -285,17 +344,29 @@ async fn handle_get_policy(state: Arc<IamState>, params: HashMap<String, String>
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::NoSuchEntity(arn)) => {
-            error_response(StatusCode::NOT_FOUND, "NoSuchEntity", &format!("Policy {} not found", arn))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::NoSuchEntity(arn)) => error_response(
+            StatusCode::NOT_FOUND,
+            "NoSuchEntity",
+            &format!("Policy {} not found", arn),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_delete_policy(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
     let policy_arn = match params.get("PolicyArn") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "PolicyArn is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "PolicyArn is required",
+            )
+        }
     };
 
     match state.storage.delete_policy(policy_arn) {
@@ -310,21 +381,42 @@ async fn handle_delete_policy(state: Arc<IamState>, params: HashMap<String, Stri
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::NoSuchEntity(arn)) => {
-            error_response(StatusCode::NOT_FOUND, "NoSuchEntity", &format!("Policy {} not found", arn))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::NoSuchEntity(arn)) => error_response(
+            StatusCode::NOT_FOUND,
+            "NoSuchEntity",
+            &format!("Policy {} not found", arn),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 
-async fn handle_attach_role_policy(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
+async fn handle_attach_role_policy(
+    state: Arc<IamState>,
+    params: HashMap<String, String>,
+) -> Response {
     let role_name = match params.get("RoleName") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "RoleName is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "RoleName is required",
+            )
+        }
     };
     let policy_arn = match params.get("PolicyArn") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "PolicyArn is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "PolicyArn is required",
+            )
+        }
     };
 
     match state.storage.attach_role_policy(role_name, policy_arn) {
@@ -339,21 +431,42 @@ async fn handle_attach_role_policy(state: Arc<IamState>, params: HashMap<String,
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::NoSuchEntity(name)) => {
-            error_response(StatusCode::NOT_FOUND, "NoSuchEntity", &format!("Entity {} not found", name))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::NoSuchEntity(name)) => error_response(
+            StatusCode::NOT_FOUND,
+            "NoSuchEntity",
+            &format!("Entity {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 
-async fn handle_detach_role_policy(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
+async fn handle_detach_role_policy(
+    state: Arc<IamState>,
+    params: HashMap<String, String>,
+) -> Response {
     let role_name = match params.get("RoleName") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "RoleName is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "RoleName is required",
+            )
+        }
     };
     let policy_arn = match params.get("PolicyArn") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "PolicyArn is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "PolicyArn is required",
+            )
+        }
     };
 
     match state.storage.detach_role_policy(role_name, policy_arn) {
@@ -368,17 +481,32 @@ async fn handle_detach_role_policy(state: Arc<IamState>, params: HashMap<String,
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::NoSuchEntity(name)) => {
-            error_response(StatusCode::NOT_FOUND, "NoSuchEntity", &format!("Entity {} not found", name))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::NoSuchEntity(name)) => error_response(
+            StatusCode::NOT_FOUND,
+            "NoSuchEntity",
+            &format!("Entity {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 
-async fn handle_list_attached_role_policies(state: Arc<IamState>, params: HashMap<String, String>) -> Response {
+async fn handle_list_attached_role_policies(
+    state: Arc<IamState>,
+    params: HashMap<String, String>,
+) -> Response {
     let role_name = match params.get("RoleName") {
         Some(n) => n,
-        None => return error_response(StatusCode::BAD_REQUEST, "ValidationError", "RoleName is required"),
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationError",
+                "RoleName is required",
+            )
+        }
     };
 
     match state.storage.list_attached_role_policies(role_name) {
@@ -387,7 +515,7 @@ async fn handle_list_attached_role_policies(state: Arc<IamState>, params: HashMa
                 .iter()
                 .map(|arn| {
                     // Extract policy name from ARN
-                    let name = arn.split('/').last().unwrap_or(arn);
+                    let name = arn.split('/').next_back().unwrap_or(arn);
                     format!(
                         r#"    <member>
       <PolicyName>{}</PolicyName>
@@ -416,10 +544,16 @@ async fn handle_list_attached_role_policies(state: Arc<IamState>, params: HashMa
             );
             xml_response(StatusCode::OK, &xml)
         }
-        Err(IamError::NoSuchEntity(name)) => {
-            error_response(StatusCode::NOT_FOUND, "NoSuchEntity", &format!("Role {} not found", name))
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "ServiceFailure", &e.to_string()),
+        Err(IamError::NoSuchEntity(name)) => error_response(
+            StatusCode::NOT_FOUND,
+            "NoSuchEntity",
+            &format!("Role {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "ServiceFailure",
+            &e.to_string(),
+        ),
     }
 }
 

@@ -118,6 +118,7 @@ struct PutSecretValueResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 struct DeleteSecretRequest {
     secret_id: String,
     #[serde(default)]
@@ -161,6 +162,7 @@ struct DescribeSecretResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 struct ListSecretsRequest {
     max_results: Option<i32>,
     next_token: Option<String>,
@@ -191,7 +193,13 @@ struct SecretListEntry {
 async fn handle_create_secret(state: Arc<SecretsManagerState>, body: Bytes) -> Response {
     let req: CreateSecretRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
     let tags: HashMap<String, String> = req.tags.into_iter().map(|t| (t.key, t.value)).collect();
@@ -212,21 +220,29 @@ async fn handle_create_secret(state: Arc<SecretsManagerState>, body: Bytes) -> R
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(SecretsManagerError::ResourceExists(name)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceExistsException",
-                &format!("Secret {} already exists", name),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalServiceError", &e.to_string()),
+        Err(SecretsManagerError::ResourceExists(name)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceExistsException",
+            &format!("Secret {} already exists", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalServiceError",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_get_secret_value(state: Arc<SecretsManagerState>, body: Bytes) -> Response {
     let req: GetSecretValueRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
     match state.storage.get_secret_value(
@@ -246,24 +262,35 @@ async fn handle_get_secret_value(state: Arc<SecretsManagerState>, body: Bytes) -
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(SecretsManagerError::ResourceNotFound(id)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceNotFoundException",
-                &format!("Secret {} not found", id),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalServiceError", &e.to_string()),
+        Err(SecretsManagerError::ResourceNotFound(id)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceNotFoundException",
+            &format!("Secret {} not found", id),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalServiceError",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_put_secret_value(state: Arc<SecretsManagerState>, body: Bytes) -> Response {
     let req: PutSecretValueRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
-    match state.storage.put_secret_value(&req.secret_id, req.secret_string, req.secret_binary) {
+    match state
+        .storage
+        .put_secret_value(&req.secret_id, req.secret_string, req.secret_binary)
+    {
         Ok((secret, version)) => {
             let response = PutSecretValueResponse {
                 arn: secret.arn,
@@ -273,24 +300,35 @@ async fn handle_put_secret_value(state: Arc<SecretsManagerState>, body: Bytes) -
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(SecretsManagerError::ResourceNotFound(id)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceNotFoundException",
-                &format!("Secret {} not found", id),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalServiceError", &e.to_string()),
+        Err(SecretsManagerError::ResourceNotFound(id)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceNotFoundException",
+            &format!("Secret {} not found", id),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalServiceError",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_delete_secret(state: Arc<SecretsManagerState>, body: Bytes) -> Response {
     let req: DeleteSecretRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
-    match state.storage.delete_secret(&req.secret_id, req.force_delete_without_recovery) {
+    match state
+        .storage
+        .delete_secret(&req.secret_id, req.force_delete_without_recovery)
+    {
         Ok(secret) => {
             let response = DeleteSecretResponse {
                 arn: secret.arn,
@@ -299,21 +337,29 @@ async fn handle_delete_secret(state: Arc<SecretsManagerState>, body: Bytes) -> R
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(SecretsManagerError::ResourceNotFound(id)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceNotFoundException",
-                &format!("Secret {} not found", id),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalServiceError", &e.to_string()),
+        Err(SecretsManagerError::ResourceNotFound(id)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceNotFoundException",
+            &format!("Secret {} not found", id),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalServiceError",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_describe_secret(state: Arc<SecretsManagerState>, body: Bytes) -> Response {
     let req: DescribeSecretRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
     match state.storage.describe_secret(&req.secret_id) {
@@ -337,14 +383,16 @@ async fn handle_describe_secret(state: Arc<SecretsManagerState>, body: Bytes) ->
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(SecretsManagerError::ResourceNotFound(id)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceNotFoundException",
-                &format!("Secret {} not found", id),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalServiceError", &e.to_string()),
+        Err(SecretsManagerError::ResourceNotFound(id)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceNotFoundException",
+            &format!("Secret {} not found", id),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalServiceError",
+            &e.to_string(),
+        ),
     }
 }
 

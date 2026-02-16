@@ -149,18 +149,12 @@ impl SecretsManagerStorage {
             vid.to_string()
         } else if let Some(stage) = version_stage {
             match stage {
-                "AWSCURRENT" => secret
-                    .current_version_id
-                    .clone()
-                    .ok_or(SecretsManagerError::ResourceNotFound(
-                        "No current version".to_string(),
-                    ))?,
-                "AWSPREVIOUS" => secret
-                    .previous_version_id
-                    .clone()
-                    .ok_or(SecretsManagerError::ResourceNotFound(
-                        "No previous version".to_string(),
-                    ))?,
+                "AWSCURRENT" => secret.current_version_id.clone().ok_or(
+                    SecretsManagerError::ResourceNotFound("No current version".to_string()),
+                )?,
+                "AWSPREVIOUS" => secret.previous_version_id.clone().ok_or(
+                    SecretsManagerError::ResourceNotFound("No previous version".to_string()),
+                )?,
                 _ => {
                     return Err(SecretsManagerError::InvalidParameter(format!(
                         "Unknown version stage: {}",
@@ -177,14 +171,9 @@ impl SecretsManagerStorage {
                 ))?
         };
 
-        let version = secret
-            .versions
-            .get(&version_id)
-            .cloned()
-            .ok_or(SecretsManagerError::ResourceNotFound(format!(
-                "Version {} not found",
-                version_id
-            )))?;
+        let version = secret.versions.get(&version_id).cloned().ok_or(
+            SecretsManagerError::ResourceNotFound(format!("Version {} not found", version_id)),
+        )?;
 
         Ok((secret.clone(), version))
     }
@@ -212,7 +201,9 @@ impl SecretsManagerStorage {
         if let Some(ref cvid) = current_vid {
             if let Some(current_version) = secret.versions.get_mut(cvid) {
                 current_version.version_stages.retain(|s| s != "AWSCURRENT");
-                current_version.version_stages.push("AWSPREVIOUS".to_string());
+                current_version
+                    .version_stages
+                    .push("AWSPREVIOUS".to_string());
             }
             // Remove AWSPREVIOUS from old previous
             if let Some(ref pvid) = prev_vid {
@@ -232,7 +223,9 @@ impl SecretsManagerStorage {
             version_stages: vec!["AWSCURRENT".to_string()],
         };
 
-        secret.versions.insert(new_version_id.clone(), new_version.clone());
+        secret
+            .versions
+            .insert(new_version_id.clone(), new_version.clone());
         secret.current_version_id = Some(new_version_id);
         secret.last_changed_date = now;
 
@@ -314,7 +307,7 @@ mod tests {
     #[test]
     fn test_create_and_get_secret() {
         let storage = SecretsManagerStorage::new();
-        
+
         let secret = storage
             .create_secret(
                 "my-secret",
@@ -329,10 +322,8 @@ mod tests {
         assert_eq!(secret.name, "my-secret");
         assert!(secret.current_version_id.is_some());
 
-        let (retrieved, version) = storage
-            .get_secret_value("my-secret", None, None)
-            .unwrap();
-        
+        let (retrieved, version) = storage.get_secret_value("my-secret", None, None).unwrap();
+
         assert_eq!(retrieved.name, "my-secret");
         assert_eq!(version.secret_string, Some("secret-value".to_string()));
     }
@@ -340,7 +331,7 @@ mod tests {
     #[test]
     fn test_put_secret_value_rotates_versions() {
         let storage = SecretsManagerStorage::new();
-        
+
         storage
             .create_secret(
                 "my-secret",
@@ -373,20 +364,26 @@ mod tests {
     #[test]
     fn test_duplicate_secret_fails() {
         let storage = SecretsManagerStorage::new();
-        
+
         storage
             .create_secret("my-secret", None, None, None, None, HashMap::new())
             .unwrap();
 
         let result = storage.create_secret("my-secret", None, None, None, None, HashMap::new());
-        assert!(matches!(result, Err(SecretsManagerError::ResourceExists(_))));
+        assert!(matches!(
+            result,
+            Err(SecretsManagerError::ResourceExists(_))
+        ));
     }
 
     #[test]
     fn test_get_nonexistent_secret_fails() {
         let storage = SecretsManagerStorage::new();
-        
+
         let result = storage.get_secret_value("nonexistent", None, None);
-        assert!(matches!(result, Err(SecretsManagerError::ResourceNotFound(_))));
+        assert!(matches!(
+            result,
+            Err(SecretsManagerError::ResourceNotFound(_))
+        ));
     }
 }

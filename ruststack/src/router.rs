@@ -127,15 +127,33 @@ pub fn create_router(state: AppState) -> Router {
         .route("/v2/apis/:api_id/routes", post(apigw_create_route))
         .route("/v2/apis/:api_id/routes", get(apigw_list_routes))
         .route("/v2/apis/:api_id/routes/:route_id", get(apigw_get_route))
-        .route("/v2/apis/:api_id/routes/:route_id", delete(apigw_delete_route))
-        .route("/v2/apis/:api_id/integrations", post(apigw_create_integration))
-        .route("/v2/apis/:api_id/integrations", get(apigw_list_integrations))
-        .route("/v2/apis/:api_id/integrations/:integration_id", get(apigw_get_integration))
-        .route("/v2/apis/:api_id/integrations/:integration_id", delete(apigw_delete_integration))
+        .route(
+            "/v2/apis/:api_id/routes/:route_id",
+            delete(apigw_delete_route),
+        )
+        .route(
+            "/v2/apis/:api_id/integrations",
+            post(apigw_create_integration),
+        )
+        .route(
+            "/v2/apis/:api_id/integrations",
+            get(apigw_list_integrations),
+        )
+        .route(
+            "/v2/apis/:api_id/integrations/:integration_id",
+            get(apigw_get_integration),
+        )
+        .route(
+            "/v2/apis/:api_id/integrations/:integration_id",
+            delete(apigw_delete_integration),
+        )
         .route("/v2/apis/:api_id/stages", post(apigw_create_stage))
         .route("/v2/apis/:api_id/stages", get(apigw_list_stages))
         .route("/v2/apis/:api_id/stages/:stage_name", get(apigw_get_stage))
-        .route("/v2/apis/:api_id/stages/:stage_name", delete(apigw_delete_stage));
+        .route(
+            "/v2/apis/:api_id/stages/:stage_name",
+            delete(apigw_delete_stage),
+        );
 
     Router::new()
         // Health check endpoint
@@ -337,12 +355,8 @@ async fn handle_root(
                     || body_str.contains("Action=DetachRolePolicy")
                     || body_str.contains("Action=ListAttachedRolePolicies")
                 {
-                    return iam_handlers::handle_request(
-                        State(state.iam.clone()),
-                        headers,
-                        body,
-                    )
-                    .await;
+                    return iam_handlers::handle_request(State(state.iam.clone()), headers, body)
+                        .await;
                 }
             }
         }
@@ -416,14 +430,25 @@ async fn apigw_create_api(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::POST, "/apis", headers, body).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::POST,
+        "/apis",
+        headers,
+        body,
+    )
+    .await
 }
 
-async fn apigw_list_apis(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-) -> Response {
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, "/apis", headers, Bytes::new()).await
+async fn apigw_list_apis(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::GET,
+        "/apis",
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_get_api(
@@ -432,7 +457,14 @@ async fn apigw_get_api(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}", api_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::GET,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_delete_api(
@@ -441,7 +473,14 @@ async fn apigw_delete_api(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}", api_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::DELETE, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::DELETE,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_create_route(
@@ -451,7 +490,14 @@ async fn apigw_create_route(
     body: Bytes,
 ) -> Response {
     let path = format!("/apis/{}/routes", api_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::POST, &path, headers, body).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::POST,
+        &path,
+        headers,
+        body,
+    )
+    .await
 }
 
 async fn apigw_list_routes(
@@ -460,7 +506,14 @@ async fn apigw_list_routes(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/routes", api_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::GET,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_get_route(
@@ -469,7 +522,14 @@ async fn apigw_get_route(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/routes/{}", api_id, route_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::GET,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_delete_route(
@@ -478,7 +538,14 @@ async fn apigw_delete_route(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/routes/{}", api_id, route_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::DELETE, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::DELETE,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_create_integration(
@@ -488,7 +555,14 @@ async fn apigw_create_integration(
     body: Bytes,
 ) -> Response {
     let path = format!("/apis/{}/integrations", api_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::POST, &path, headers, body).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::POST,
+        &path,
+        headers,
+        body,
+    )
+    .await
 }
 
 async fn apigw_list_integrations(
@@ -497,7 +571,14 @@ async fn apigw_list_integrations(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/integrations", api_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::GET,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_get_integration(
@@ -506,7 +587,14 @@ async fn apigw_get_integration(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/integrations/{}", api_id, integration_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::GET,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_delete_integration(
@@ -515,7 +603,14 @@ async fn apigw_delete_integration(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/integrations/{}", api_id, integration_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::DELETE, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::DELETE,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_create_stage(
@@ -525,7 +620,14 @@ async fn apigw_create_stage(
     body: Bytes,
 ) -> Response {
     let path = format!("/apis/{}/stages", api_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::POST, &path, headers, body).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::POST,
+        &path,
+        headers,
+        body,
+    )
+    .await
 }
 
 async fn apigw_list_stages(
@@ -534,7 +636,14 @@ async fn apigw_list_stages(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/stages", api_id);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::GET,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_get_stage(
@@ -543,7 +652,14 @@ async fn apigw_get_stage(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/stages/{}", api_id, stage_name);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::GET,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }
 
 async fn apigw_delete_stage(
@@ -552,5 +668,12 @@ async fn apigw_delete_stage(
     headers: HeaderMap,
 ) -> Response {
     let path = format!("/apis/{}/stages/{}", api_id, stage_name);
-    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::DELETE, &path, headers, Bytes::new()).await
+    apigateway_handlers::handle_request(
+        State(state.apigateway.clone()),
+        Method::DELETE,
+        &path,
+        headers,
+        Bytes::new(),
+    )
+    .await
 }

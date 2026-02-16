@@ -36,26 +36,50 @@ pub async fn handle_request(
         (Method::DELETE, ["apis", api_id]) => handle_delete_api(state, api_id).await,
 
         // Routes
-        (Method::POST, ["apis", api_id, "routes"]) => handle_create_route(state, api_id, body).await,
+        (Method::POST, ["apis", api_id, "routes"]) => {
+            handle_create_route(state, api_id, body).await
+        }
         (Method::GET, ["apis", api_id, "routes"]) => handle_list_routes(state, api_id).await,
-        (Method::GET, ["apis", api_id, "routes", route_id]) => handle_get_route(state, api_id, route_id).await,
-        (Method::DELETE, ["apis", api_id, "routes", route_id]) => handle_delete_route(state, api_id, route_id).await,
+        (Method::GET, ["apis", api_id, "routes", route_id]) => {
+            handle_get_route(state, api_id, route_id).await
+        }
+        (Method::DELETE, ["apis", api_id, "routes", route_id]) => {
+            handle_delete_route(state, api_id, route_id).await
+        }
 
         // Integrations
-        (Method::POST, ["apis", api_id, "integrations"]) => handle_create_integration(state, api_id, body).await,
-        (Method::GET, ["apis", api_id, "integrations"]) => handle_list_integrations(state, api_id).await,
-        (Method::GET, ["apis", api_id, "integrations", int_id]) => handle_get_integration(state, api_id, int_id).await,
-        (Method::DELETE, ["apis", api_id, "integrations", int_id]) => handle_delete_integration(state, api_id, int_id).await,
+        (Method::POST, ["apis", api_id, "integrations"]) => {
+            handle_create_integration(state, api_id, body).await
+        }
+        (Method::GET, ["apis", api_id, "integrations"]) => {
+            handle_list_integrations(state, api_id).await
+        }
+        (Method::GET, ["apis", api_id, "integrations", int_id]) => {
+            handle_get_integration(state, api_id, int_id).await
+        }
+        (Method::DELETE, ["apis", api_id, "integrations", int_id]) => {
+            handle_delete_integration(state, api_id, int_id).await
+        }
 
         // Stages
-        (Method::POST, ["apis", api_id, "stages"]) => handle_create_stage(state, api_id, body).await,
+        (Method::POST, ["apis", api_id, "stages"]) => {
+            handle_create_stage(state, api_id, body).await
+        }
         (Method::GET, ["apis", api_id, "stages"]) => handle_list_stages(state, api_id).await,
-        (Method::GET, ["apis", api_id, "stages", stage_name]) => handle_get_stage(state, api_id, stage_name).await,
-        (Method::DELETE, ["apis", api_id, "stages", stage_name]) => handle_delete_stage(state, api_id, stage_name).await,
+        (Method::GET, ["apis", api_id, "stages", stage_name]) => {
+            handle_get_stage(state, api_id, stage_name).await
+        }
+        (Method::DELETE, ["apis", api_id, "stages", stage_name]) => {
+            handle_delete_stage(state, api_id, stage_name).await
+        }
 
         _ => {
             warn!(method = %method, path = %path, "Unknown API Gateway operation");
-            error_response(StatusCode::NOT_FOUND, "NotFoundException", &format!("Unknown path: {}", path))
+            error_response(
+                StatusCode::NOT_FOUND,
+                "NotFoundException",
+                &format!("Unknown path: {}", path),
+            )
         }
     }
 }
@@ -86,6 +110,7 @@ struct ApiResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 struct CreateRouteRequest {
     route_key: String,
     target: Option<String>,
@@ -148,10 +173,18 @@ struct StageResponse {
 async fn handle_create_api(state: Arc<ApiGatewayState>, body: Bytes) -> Response {
     let req: CreateApiRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "BadRequestException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "BadRequestException",
+                &e.to_string(),
+            )
+        }
     };
 
-    let api = state.storage.create_api(&req.name, &req.protocol_type, req.description, req.tags);
+    let api = state
+        .storage
+        .create_api(&req.name, &req.protocol_type, req.description, req.tags);
 
     let response = ApiResponse {
         api_id: api.api_id,
@@ -177,7 +210,11 @@ async fn handle_get_api(state: Arc<ApiGatewayState>, api_id: &str) -> Response {
             };
             json_response(StatusCode::OK, &response)
         }
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", &format!("API {} not found", api_id)),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            &format!("API {} not found", api_id),
+        ),
     }
 }
 
@@ -187,7 +224,11 @@ async fn handle_delete_api(state: Arc<ApiGatewayState>, api_id: &str) -> Respons
             .status(StatusCode::NO_CONTENT)
             .body(Body::empty())
             .unwrap(),
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", &format!("API {} not found", api_id)),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            &format!("API {} not found", api_id),
+        ),
     }
 }
 
@@ -214,10 +255,19 @@ async fn handle_list_apis(state: Arc<ApiGatewayState>) -> Response {
 async fn handle_create_route(state: Arc<ApiGatewayState>, api_id: &str, body: Bytes) -> Response {
     let req: CreateRouteRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "BadRequestException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "BadRequestException",
+                &e.to_string(),
+            )
+        }
     };
 
-    match state.storage.create_route(api_id, &req.route_key, req.target) {
+    match state
+        .storage
+        .create_route(api_id, &req.route_key, req.target)
+    {
         Some(route) => {
             let response = RouteResponse {
                 route_id: route.route_id,
@@ -227,7 +277,11 @@ async fn handle_create_route(state: Arc<ApiGatewayState>, api_id: &str, body: By
             };
             json_response(StatusCode::CREATED, &response)
         }
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", &format!("API {} not found", api_id)),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            &format!("API {} not found", api_id),
+        ),
     }
 }
 
@@ -242,17 +296,29 @@ async fn handle_get_route(state: Arc<ApiGatewayState>, api_id: &str, route_id: &
             };
             json_response(StatusCode::OK, &response)
         }
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", "Route not found"),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            "Route not found",
+        ),
     }
 }
 
-async fn handle_delete_route(state: Arc<ApiGatewayState>, api_id: &str, route_id: &str) -> Response {
+async fn handle_delete_route(
+    state: Arc<ApiGatewayState>,
+    api_id: &str,
+    route_id: &str,
+) -> Response {
     match state.storage.delete_route(api_id, route_id) {
         Some(_) => Response::builder()
             .status(StatusCode::NO_CONTENT)
             .body(Body::empty())
             .unwrap(),
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", "Route not found"),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            "Route not found",
+        ),
     }
 }
 
@@ -274,10 +340,20 @@ async fn handle_list_routes(state: Arc<ApiGatewayState>, api_id: &str) -> Respon
 
 // === Integration Handlers ===
 
-async fn handle_create_integration(state: Arc<ApiGatewayState>, api_id: &str, body: Bytes) -> Response {
+async fn handle_create_integration(
+    state: Arc<ApiGatewayState>,
+    api_id: &str,
+    body: Bytes,
+) -> Response {
     let req: CreateIntegrationRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "BadRequestException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "BadRequestException",
+                &e.to_string(),
+            )
+        }
     };
 
     match state.storage.create_integration(
@@ -297,11 +373,19 @@ async fn handle_create_integration(state: Arc<ApiGatewayState>, api_id: &str, bo
             };
             json_response(StatusCode::CREATED, &response)
         }
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", &format!("API {} not found", api_id)),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            &format!("API {} not found", api_id),
+        ),
     }
 }
 
-async fn handle_get_integration(state: Arc<ApiGatewayState>, api_id: &str, integration_id: &str) -> Response {
+async fn handle_get_integration(
+    state: Arc<ApiGatewayState>,
+    api_id: &str,
+    integration_id: &str,
+) -> Response {
     match state.storage.get_integration(api_id, integration_id) {
         Some(integration) => {
             let response = IntegrationResponse {
@@ -313,17 +397,29 @@ async fn handle_get_integration(state: Arc<ApiGatewayState>, api_id: &str, integ
             };
             json_response(StatusCode::OK, &response)
         }
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", "Integration not found"),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            "Integration not found",
+        ),
     }
 }
 
-async fn handle_delete_integration(state: Arc<ApiGatewayState>, api_id: &str, integration_id: &str) -> Response {
+async fn handle_delete_integration(
+    state: Arc<ApiGatewayState>,
+    api_id: &str,
+    integration_id: &str,
+) -> Response {
     match state.storage.delete_integration(api_id, integration_id) {
         Some(_) => Response::builder()
             .status(StatusCode::NO_CONTENT)
             .body(Body::empty())
             .unwrap(),
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", "Integration not found"),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            "Integration not found",
+        ),
     }
 }
 
@@ -349,10 +445,19 @@ async fn handle_list_integrations(state: Arc<ApiGatewayState>, api_id: &str) -> 
 async fn handle_create_stage(state: Arc<ApiGatewayState>, api_id: &str, body: Bytes) -> Response {
     let req: CreateStageRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "BadRequestException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "BadRequestException",
+                &e.to_string(),
+            )
+        }
     };
 
-    match state.storage.create_stage(api_id, &req.stage_name, req.auto_deploy, req.description) {
+    match state
+        .storage
+        .create_stage(api_id, &req.stage_name, req.auto_deploy, req.description)
+    {
         Some(stage) => {
             let response = StageResponse {
                 stage_name: stage.stage_name,
@@ -362,7 +467,11 @@ async fn handle_create_stage(state: Arc<ApiGatewayState>, api_id: &str, body: By
             };
             json_response(StatusCode::CREATED, &response)
         }
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", &format!("API {} not found", api_id)),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            &format!("API {} not found", api_id),
+        ),
     }
 }
 
@@ -377,17 +486,29 @@ async fn handle_get_stage(state: Arc<ApiGatewayState>, api_id: &str, stage_name:
             };
             json_response(StatusCode::OK, &response)
         }
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", "Stage not found"),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            "Stage not found",
+        ),
     }
 }
 
-async fn handle_delete_stage(state: Arc<ApiGatewayState>, api_id: &str, stage_name: &str) -> Response {
+async fn handle_delete_stage(
+    state: Arc<ApiGatewayState>,
+    api_id: &str,
+    stage_name: &str,
+) -> Response {
     match state.storage.delete_stage(api_id, stage_name) {
         Some(_) => Response::builder()
             .status(StatusCode::NO_CONTENT)
             .body(Body::empty())
             .unwrap(),
-        None => error_response(StatusCode::NOT_FOUND, "NotFoundException", "Stage not found"),
+        None => error_response(
+            StatusCode::NOT_FOUND,
+            "NotFoundException",
+            "Stage not found",
+        ),
     }
 }
 

@@ -82,7 +82,9 @@ impl FirehoseStorage {
         buffering_hints: Option<BufferingHints>,
     ) -> Result<DeliveryStream, FirehoseError> {
         if self.streams.contains_key(delivery_stream_name) {
-            return Err(FirehoseError::ResourceInUse(delivery_stream_name.to_string()));
+            return Err(FirehoseError::ResourceInUse(
+                delivery_stream_name.to_string(),
+            ));
         }
 
         let stream = DeliveryStream {
@@ -100,8 +102,10 @@ impl FirehoseStorage {
             buffering_hints: buffering_hints.unwrap_or_default(),
         };
 
-        self.streams.insert(delivery_stream_name.to_string(), stream.clone());
-        self.buffers.insert(delivery_stream_name.to_string(), Vec::new());
+        self.streams
+            .insert(delivery_stream_name.to_string(), stream.clone());
+        self.buffers
+            .insert(delivery_stream_name.to_string(), Vec::new());
 
         Ok(stream)
     }
@@ -116,7 +120,10 @@ impl FirehoseStorage {
     }
 
     /// Describe a delivery stream
-    pub fn describe_delivery_stream(&self, delivery_stream_name: &str) -> Result<DeliveryStream, FirehoseError> {
+    pub fn describe_delivery_stream(
+        &self,
+        delivery_stream_name: &str,
+    ) -> Result<DeliveryStream, FirehoseError> {
         self.streams
             .get(delivery_stream_name)
             .map(|s| s.clone())
@@ -134,9 +141,15 @@ impl FirehoseStorage {
     }
 
     /// Put a single record
-    pub fn put_record(&self, delivery_stream_name: &str, data: Vec<u8>) -> Result<String, FirehoseError> {
+    pub fn put_record(
+        &self,
+        delivery_stream_name: &str,
+        data: Vec<u8>,
+    ) -> Result<String, FirehoseError> {
         if !self.streams.contains_key(delivery_stream_name) {
-            return Err(FirehoseError::ResourceNotFound(delivery_stream_name.to_string()));
+            return Err(FirehoseError::ResourceNotFound(
+                delivery_stream_name.to_string(),
+            ));
         }
 
         let record = BufferedRecord {
@@ -159,7 +172,9 @@ impl FirehoseStorage {
         records: Vec<Vec<u8>>,
     ) -> Result<PutRecordBatchResult, FirehoseError> {
         if !self.streams.contains_key(delivery_stream_name) {
-            return Err(FirehoseError::ResourceNotFound(delivery_stream_name.to_string()));
+            return Err(FirehoseError::ResourceNotFound(
+                delivery_stream_name.to_string(),
+            ));
         }
 
         let mut record_ids = Vec::new();
@@ -251,7 +266,9 @@ mod tests {
             .create_delivery_stream("test-stream", "DirectPut", None, None, None)
             .unwrap();
 
-        let record_id = storage.put_record("test-stream", b"test data".to_vec()).unwrap();
+        let record_id = storage
+            .put_record("test-stream", b"test data".to_vec())
+            .unwrap();
         assert!(!record_id.is_empty());
 
         let records = storage.get_buffered_records("test-stream");

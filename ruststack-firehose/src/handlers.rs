@@ -28,9 +28,15 @@ pub async fn handle_request(
     info!(target = %target, "Firehose request");
 
     match target {
-        "Firehose_20150804.CreateDeliveryStream" => handle_create_delivery_stream(state, body).await,
-        "Firehose_20150804.DeleteDeliveryStream" => handle_delete_delivery_stream(state, body).await,
-        "Firehose_20150804.DescribeDeliveryStream" => handle_describe_delivery_stream(state, body).await,
+        "Firehose_20150804.CreateDeliveryStream" => {
+            handle_create_delivery_stream(state, body).await
+        }
+        "Firehose_20150804.DeleteDeliveryStream" => {
+            handle_delete_delivery_stream(state, body).await
+        }
+        "Firehose_20150804.DescribeDeliveryStream" => {
+            handle_describe_delivery_stream(state, body).await
+        }
         "Firehose_20150804.ListDeliveryStreams" => handle_list_delivery_streams(state, body).await,
         "Firehose_20150804.PutRecord" => handle_put_record(state, body).await,
         "Firehose_20150804.PutRecordBatch" => handle_put_record_batch(state, body).await,
@@ -58,6 +64,7 @@ struct CreateDeliveryStreamRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 struct ExtendedS3Config {
     bucket_arn: Option<String>,
     #[serde(rename = "Prefix")]
@@ -68,6 +75,7 @@ struct ExtendedS3Config {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 struct S3Config {
     bucket_arn: Option<String>,
     #[serde(rename = "Prefix")]
@@ -143,6 +151,7 @@ struct BufferingHintsResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
+#[allow(dead_code)]
 struct ListDeliveryStreamsRequest {
     limit: Option<usize>,
     exclusive_start_delivery_stream_name: Option<String>,
@@ -201,23 +210,32 @@ struct PutRecordBatchResponseEntry {
 async fn handle_create_delivery_stream(state: Arc<FirehoseState>, body: Bytes) -> Response {
     let req: CreateDeliveryStreamRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
-    let delivery_stream_type = req.delivery_stream_type.unwrap_or_else(|| "DirectPut".to_string());
+    let delivery_stream_type = req
+        .delivery_stream_type
+        .unwrap_or_else(|| "DirectPut".to_string());
 
     // Extract S3 config from either extended or regular config
-    let (s3_bucket_arn, s3_prefix, buffering) = if let Some(ext) = req.extended_s3_destination_configuration {
-        let hints = ext.buffering_hints.map(|h| BufferingHints {
-            size_in_mbs: h.size_in_m_bs.unwrap_or(5),
-            interval_in_seconds: h.interval_in_seconds.unwrap_or(300),
-        });
-        (ext.bucket_arn, ext.prefix, hints)
-    } else if let Some(s3) = req.s3_destination_configuration {
-        (s3.bucket_arn, s3.prefix, None)
-    } else {
-        (None, None, None)
-    };
+    let (s3_bucket_arn, s3_prefix, buffering) =
+        if let Some(ext) = req.extended_s3_destination_configuration {
+            let hints = ext.buffering_hints.map(|h| BufferingHints {
+                size_in_mbs: h.size_in_m_bs.unwrap_or(5),
+                interval_in_seconds: h.interval_in_seconds.unwrap_or(300),
+            });
+            (ext.bucket_arn, ext.prefix, hints)
+        } else if let Some(s3) = req.s3_destination_configuration {
+            (s3.bucket_arn, s3.prefix, None)
+        } else {
+            (None, None, None)
+        };
 
     match state.storage.create_delivery_stream(
         &req.delivery_stream_name,
@@ -232,43 +250,65 @@ async fn handle_create_delivery_stream(state: Arc<FirehoseState>, body: Bytes) -
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(FirehoseError::ResourceInUse(name)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceInUseException",
-                &format!("Delivery stream {} already exists", name),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalFailure", &e.to_string()),
+        Err(FirehoseError::ResourceInUse(name)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceInUseException",
+            &format!("Delivery stream {} already exists", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalFailure",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_delete_delivery_stream(state: Arc<FirehoseState>, body: Bytes) -> Response {
     let req: DeleteDeliveryStreamRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
-    };
-
-    match state.storage.delete_delivery_stream(&req.delivery_stream_name) {
-        Ok(()) => json_response(StatusCode::OK, &serde_json::json!({})),
-        Err(FirehoseError::ResourceNotFound(name)) => {
-            error_response(
+        Err(e) => {
+            return error_response(
                 StatusCode::BAD_REQUEST,
-                "ResourceNotFoundException",
-                &format!("Delivery stream {} not found", name),
+                "ValidationException",
+                &e.to_string(),
             )
         }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalFailure", &e.to_string()),
+    };
+
+    match state
+        .storage
+        .delete_delivery_stream(&req.delivery_stream_name)
+    {
+        Ok(()) => json_response(StatusCode::OK, &serde_json::json!({})),
+        Err(FirehoseError::ResourceNotFound(name)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceNotFoundException",
+            &format!("Delivery stream {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalFailure",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_describe_delivery_stream(state: Arc<FirehoseState>, body: Bytes) -> Response {
     let req: DescribeDeliveryStreamRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
-    match state.storage.describe_delivery_stream(&req.delivery_stream_name) {
+    match state
+        .storage
+        .describe_delivery_stream(&req.delivery_stream_name)
+    {
         Ok(stream) => {
             let response = DescribeDeliveryStreamResponse {
                 delivery_stream_description: DeliveryStreamDescription {
@@ -279,35 +319,40 @@ async fn handle_describe_delivery_stream(state: Arc<FirehoseState>, body: Bytes)
                     create_timestamp: stream.create_timestamp.timestamp() as f64,
                     destinations: vec![DestinationDescription {
                         destination_id: "destinationId-000000000001".to_string(),
-                        extended_s3_destination_description: Some(ExtendedS3DestinationDescription {
-                            bucket_arn: stream.s3_bucket_arn,
-                            prefix: stream.s3_prefix,
-                            buffering_hints: BufferingHintsResponse {
-                                size_in_m_bs: stream.buffering_hints.size_in_mbs,
-                                interval_in_seconds: stream.buffering_hints.interval_in_seconds,
+                        extended_s3_destination_description: Some(
+                            ExtendedS3DestinationDescription {
+                                bucket_arn: stream.s3_bucket_arn,
+                                prefix: stream.s3_prefix,
+                                buffering_hints: BufferingHintsResponse {
+                                    size_in_m_bs: stream.buffering_hints.size_in_mbs,
+                                    interval_in_seconds: stream.buffering_hints.interval_in_seconds,
+                                },
                             },
-                        }),
+                        ),
                     }],
                 },
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(FirehoseError::ResourceNotFound(name)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceNotFoundException",
-                &format!("Delivery stream {} not found", name),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalFailure", &e.to_string()),
+        Err(FirehoseError::ResourceNotFound(name)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceNotFoundException",
+            &format!("Delivery stream {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalFailure",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_list_delivery_streams(state: Arc<FirehoseState>, body: Bytes) -> Response {
-    let req: ListDeliveryStreamsRequest = serde_json::from_slice(&body).unwrap_or(ListDeliveryStreamsRequest {
-        limit: None,
-        exclusive_start_delivery_stream_name: None,
-    });
+    let req: ListDeliveryStreamsRequest =
+        serde_json::from_slice(&body).unwrap_or(ListDeliveryStreamsRequest {
+            limit: None,
+            exclusive_start_delivery_stream_name: None,
+        });
 
     let streams = state.storage.list_delivery_streams(req.limit);
     let response = ListDeliveryStreamsResponse {
@@ -320,13 +365,25 @@ async fn handle_list_delivery_streams(state: Arc<FirehoseState>, body: Bytes) ->
 async fn handle_put_record(state: Arc<FirehoseState>, body: Bytes) -> Response {
     let req: PutRecordRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
     // Decode base64 data
     let data = match BASE64.decode(&req.record.data) {
         Ok(d) => d,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &format!("Invalid base64: {}", e)),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &format!("Invalid base64: {}", e),
+            )
+        }
     };
 
     match state.storage.put_record(&req.delivery_stream_name, data) {
@@ -337,21 +394,29 @@ async fn handle_put_record(state: Arc<FirehoseState>, body: Bytes) -> Response {
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(FirehoseError::ResourceNotFound(name)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceNotFoundException",
-                &format!("Delivery stream {} not found", name),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalFailure", &e.to_string()),
+        Err(FirehoseError::ResourceNotFound(name)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceNotFoundException",
+            &format!("Delivery stream {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalFailure",
+            &e.to_string(),
+        ),
     }
 }
 
 async fn handle_put_record_batch(state: Arc<FirehoseState>, body: Bytes) -> Response {
     let req: PutRecordBatchRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &e.to_string()),
+        Err(e) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "ValidationException",
+                &e.to_string(),
+            )
+        }
     };
 
     // Decode all records
@@ -359,11 +424,20 @@ async fn handle_put_record_batch(state: Arc<FirehoseState>, body: Bytes) -> Resp
     for record in req.records {
         match BASE64.decode(&record.data) {
             Ok(d) => records.push(d),
-            Err(e) => return error_response(StatusCode::BAD_REQUEST, "ValidationException", &format!("Invalid base64: {}", e)),
+            Err(e) => {
+                return error_response(
+                    StatusCode::BAD_REQUEST,
+                    "ValidationException",
+                    &format!("Invalid base64: {}", e),
+                )
+            }
         }
     }
 
-    match state.storage.put_record_batch(&req.delivery_stream_name, records) {
+    match state
+        .storage
+        .put_record_batch(&req.delivery_stream_name, records)
+    {
         Ok(result) => {
             let response = PutRecordBatchResponse {
                 failed_put_count: result.failed_put_count,
@@ -376,14 +450,16 @@ async fn handle_put_record_batch(state: Arc<FirehoseState>, body: Bytes) -> Resp
             };
             json_response(StatusCode::OK, &response)
         }
-        Err(FirehoseError::ResourceNotFound(name)) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                "ResourceNotFoundException",
-                &format!("Delivery stream {} not found", name),
-            )
-        }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "InternalFailure", &e.to_string()),
+        Err(FirehoseError::ResourceNotFound(name)) => error_response(
+            StatusCode::BAD_REQUEST,
+            "ResourceNotFoundException",
+            &format!("Delivery stream {} not found", name),
+        ),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "InternalFailure",
+            &e.to_string(),
+        ),
     }
 }
 

@@ -77,7 +77,10 @@ impl IamStorage {
         }
 
         let path = path.unwrap_or_else(|| "/".to_string());
-        let role_id = format!("AROA{}", &Uuid::new_v4().to_string().replace("-", "")[..17].to_uppercase());
+        let role_id = format!(
+            "AROA{}",
+            &Uuid::new_v4().to_string().replace("-", "")[..17].to_uppercase()
+        );
         let arn = format!("arn:aws:iam::000000000000:role{}{}", path, role_name);
 
         let role = Role {
@@ -125,7 +128,10 @@ impl IamStorage {
         path: Option<String>,
     ) -> Result<Policy, IamError> {
         let path = path.unwrap_or_else(|| "/".to_string());
-        let policy_id = format!("ANPA{}", &Uuid::new_v4().to_string().replace("-", "")[..17].to_uppercase());
+        let policy_id = format!(
+            "ANPA{}",
+            &Uuid::new_v4().to_string().replace("-", "")[..17].to_uppercase()
+        );
         let arn = format!("arn:aws:iam::000000000000:policy{}{}", path, policy_name);
 
         if self.policies.contains_key(&arn) {
@@ -172,7 +178,7 @@ impl IamStorage {
 
         if !role.attached_policies.contains(&policy_arn.to_string()) {
             role.attached_policies.push(policy_arn.to_string());
-            
+
             // Increment attachment count on policy
             if let Some(mut policy) = self.policies.get_mut(policy_arn) {
                 policy.attachment_count += 1;
@@ -189,7 +195,7 @@ impl IamStorage {
             .ok_or_else(|| IamError::NoSuchEntity(role_name.to_string()))?;
 
         role.attached_policies.retain(|p| p != policy_arn);
-        
+
         // Decrement attachment count on policy
         if let Some(mut policy) = self.policies.get_mut(policy_arn) {
             policy.attachment_count = (policy.attachment_count - 1).max(0);
@@ -246,7 +252,7 @@ mod tests {
     #[test]
     fn test_create_and_get_role() {
         let storage = IamStorage::new();
-        
+
         let role = storage
             .create_role(
                 "TestRole",
@@ -266,18 +272,14 @@ mod tests {
     #[test]
     fn test_attach_policy_to_role() {
         let storage = IamStorage::new();
-        
-        storage
-            .create_role("TestRole", "{}", None, None)
-            .unwrap();
+
+        storage.create_role("TestRole", "{}", None, None).unwrap();
 
         let policy = storage
             .create_policy("TestPolicy", "{}", None, None)
             .unwrap();
 
-        storage
-            .attach_role_policy("TestRole", &policy.arn)
-            .unwrap();
+        storage.attach_role_policy("TestRole", &policy.arn).unwrap();
 
         let attached = storage.list_attached_role_policies("TestRole").unwrap();
         assert!(attached.contains(&policy.arn));
@@ -286,7 +288,7 @@ mod tests {
     #[test]
     fn test_duplicate_role_fails() {
         let storage = IamStorage::new();
-        
+
         storage.create_role("TestRole", "{}", None, None).unwrap();
 
         let result = storage.create_role("TestRole", "{}", None, None);
