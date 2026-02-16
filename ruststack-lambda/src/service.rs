@@ -447,6 +447,7 @@ except Exception as e:
             Runtime::Python310 => "python3.10",
             Runtime::Python311 => "python3.11",
             Runtime::Python312 => "python3.12",
+            Runtime::Python313 => "python3.13",
             _ => "python3",
         };
 

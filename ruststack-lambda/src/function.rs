@@ -16,6 +16,8 @@ pub enum Runtime {
     Python311,
     #[serde(rename = "python3.12")]
     Python312,
+    #[serde(rename = "python3.13")]
+    Python313,
     #[serde(rename = "nodejs18.x")]
     Nodejs18,
     #[serde(rename = "nodejs20.x")]
@@ -34,6 +36,7 @@ impl Runtime {
             Self::Python310 => "public.ecr.aws/lambda/python:3.10",
             Self::Python311 => "public.ecr.aws/lambda/python:3.11",
             Self::Python312 => "public.ecr.aws/lambda/python:3.12",
+            Self::Python313 => "public.ecr.aws/lambda/python:3.13",
             Self::Nodejs18 => "public.ecr.aws/lambda/nodejs:18",
             Self::Nodejs20 => "public.ecr.aws/lambda/nodejs:20",
             Self::ProvidedAl2 => "public.ecr.aws/lambda/provided:al2",
@@ -49,6 +52,7 @@ impl Runtime {
             "python3.10" => Some(Self::Python310),
             "python3.11" => Some(Self::Python311),
             "python3.12" => Some(Self::Python312),
+            "python3.13" => Some(Self::Python313),
             "nodejs18.x" => Some(Self::Nodejs18),
             "nodejs20.x" => Some(Self::Nodejs20),
             "provided.al2" => Some(Self::ProvidedAl2),
@@ -63,6 +67,7 @@ impl Runtime {
             Self::Python310 => "python3.10",
             Self::Python311 => "python3.11",
             Self::Python312 => "python3.12",
+            Self::Python313 => "python3.13",
             Self::Nodejs18 => "nodejs18.x",
             Self::Nodejs20 => "nodejs20.x",
             Self::ProvidedAl2 => "provided.al2",

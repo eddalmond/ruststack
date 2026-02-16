@@ -16,11 +16,17 @@ RUN cargo build --release
 # Runtime image
 FROM debian:bookworm-slim
 
+# Install Python and other dependencies for Lambda execution
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     python3 \
-    && rm -rf /var/lib/apt/lists/*
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/bin/python3.11 \
+    && ln -sf /usr/bin/python3 /usr/bin/python3.12 \
+    && ln -sf /usr/bin/python3 /usr/bin/python3.13
 
 COPY --from=builder /app/target/release/ruststack /usr/local/bin/ruststack
 
