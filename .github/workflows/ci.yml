@@ -98,7 +98,7 @@ jobs:
       
       - name: Install Python dependencies
         run: |
-          pip install boto3 requests
+          pip install boto3 requests pytest
       
       - name: Start RustStack server
         run: |
@@ -113,7 +113,9 @@ jobs:
           done
       
       - name: Run integration tests
-        run: python .github/scripts/integration_test.py
+        run: |
+          cd examples
+          pytest test_integration.py -v
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
