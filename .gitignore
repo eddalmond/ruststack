@@ -1,7 +1,6 @@
 /target
 /localstack-repo
 /s3s-repo
-Cargo.lock
 *.jar
 .idea/
 .vscode/
