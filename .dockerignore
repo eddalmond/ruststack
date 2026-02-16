@@ -1,0 +1,28 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+target/
+*.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Documentation (not needed in image)
+*.md
+!README.md
+docs/
+
+# Test data
+tests/
+examples/
+
+# Analysis/planning files
+localstack-repo/
+s3s-repo/
+ANALYSIS.md
+ARCHITECTURE.md
+PLAN.md

@@ -1,0 +1,42 @@
+# RustStack Docker Compose
+# Drop-in replacement for LocalStack in your test environment
+
+version: '3.8'
+
+services:
+  ruststack:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4566:4566"
+    environment:
+      - RUST_LOG=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 2s
+
+# Example usage in your test project:
+#
+# 1. Reference this compose file, or copy the ruststack service to your own:
+#
+#    services:
+#      ruststack:
+#        image: ghcr.io/eddalmond/ruststack:latest
+#        ports:
+#          - "4566:4566"
+#        healthcheck:
+#          test: ["CMD", "curl", "-f", "http://localhost:4566/health"]
+#          interval: 5s
+#          timeout: 3s
+#          retries: 5
+#
+# 2. Configure your AWS clients to use endpoint_url="http://localhost:4566"
+#
+# 3. Run tests:
+#    docker-compose up -d ruststack
+#    pytest
+#    docker-compose down
