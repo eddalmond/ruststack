@@ -4,7 +4,7 @@
 # ============================================
 # Stage 1: Build the Rust binary
 # ============================================
-FROM rust:1.75-slim-bookworm AS builder
+FROM rust:1.85-slim-bookworm AS builder
 
 WORKDIR /app
 

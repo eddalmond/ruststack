@@ -1,7 +1,7 @@
 # Dockerfile.release - builds from source for consistent glibc
 # Used by release workflow
 
-FROM rust:1.75-slim-bookworm AS builder
+FROM rust:1.85-slim-bookworm AS builder
 
 WORKDIR /app
 
