@@ -21,16 +21,26 @@ COPY ruststack-auth/Cargo.toml ruststack-auth/
 COPY ruststack-s3/Cargo.toml ruststack-s3/
 COPY ruststack-dynamodb/Cargo.toml ruststack-dynamodb/
 COPY ruststack-lambda/Cargo.toml ruststack-lambda/
+COPY ruststack-secretsmanager/Cargo.toml ruststack-secretsmanager/
+COPY ruststack-iam/Cargo.toml ruststack-iam/
+COPY ruststack-apigateway/Cargo.toml ruststack-apigateway/
+COPY ruststack-firehose/Cargo.toml ruststack-firehose/
 
 # Create dummy source files to build dependencies
 RUN mkdir -p ruststack/src ruststack-core/src ruststack-auth/src \
-    ruststack-s3/src ruststack-dynamodb/src ruststack-lambda/src && \
+    ruststack-s3/src ruststack-dynamodb/src ruststack-lambda/src \
+    ruststack-secretsmanager/src ruststack-iam/src ruststack-apigateway/src \
+    ruststack-firehose/src && \
     echo "fn main() {}" > ruststack/src/main.rs && \
     echo "pub fn dummy() {}" > ruststack-core/src/lib.rs && \
     echo "pub fn dummy() {}" > ruststack-auth/src/lib.rs && \
     echo "pub fn dummy() {}" > ruststack-s3/src/lib.rs && \
     echo "pub fn dummy() {}" > ruststack-dynamodb/src/lib.rs && \
-    echo "pub fn dummy() {}" > ruststack-lambda/src/lib.rs
+    echo "pub fn dummy() {}" > ruststack-lambda/src/lib.rs && \
+    echo "pub fn dummy() {}" > ruststack-secretsmanager/src/lib.rs && \
+    echo "pub fn dummy() {}" > ruststack-iam/src/lib.rs && \
+    echo "pub fn dummy() {}" > ruststack-apigateway/src/lib.rs && \
+    echo "pub fn dummy() {}" > ruststack-firehose/src/lib.rs
 
 # Build dependencies only (cached layer)
 RUN cargo build --release && rm -rf target/release/.fingerprint/ruststack*
@@ -42,6 +52,10 @@ COPY ruststack-auth/src ruststack-auth/src
 COPY ruststack-s3/src ruststack-s3/src
 COPY ruststack-dynamodb/src ruststack-dynamodb/src
 COPY ruststack-lambda/src ruststack-lambda/src
+COPY ruststack-secretsmanager/src ruststack-secretsmanager/src
+COPY ruststack-iam/src ruststack-iam/src
+COPY ruststack-apigateway/src ruststack-apigateway/src
+COPY ruststack-firehose/src ruststack-firehose/src
 
 # Build the actual binary
 RUN cargo build --release
@@ -52,14 +66,10 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 
 # Install runtime dependencies
-# - ca-certificates: for HTTPS if needed
-# - python3: for Lambda function execution
-# - curl: for health checks
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     python3 \
-    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary
