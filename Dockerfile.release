@@ -1,17 +1,37 @@
-# Dockerfile for releases - uses pre-built binary
+# Dockerfile.release - builds from source for consistent glibc
+# Used by release workflow
+
+FROM rust:1.75-slim-bookworm AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy everything and build
+COPY . .
+RUN cargo build --release
+
+# Runtime image
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY artifacts/ruststack-linux-x86_64 /usr/local/bin/ruststack
-RUN chmod +x /usr/local/bin/ruststack
+COPY --from=builder /app/target/release/ruststack /usr/local/bin/ruststack
+
+RUN useradd -m -s /bin/bash ruststack
+USER ruststack
 
 EXPOSE 4566
-
 ENV RUST_LOG=info
+
+HEALTHCHECK --interval=5s --timeout=3s --start-period=2s --retries=3 \
+    CMD curl -f http://localhost:4566/health || exit 1
 
 ENTRYPOINT ["ruststack"]
 CMD ["--host", "0.0.0.0", "--port", "4566"]

@@ -128,18 +128,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download Linux binary
-        uses: actions/download-artifact@v4
-        with:
-          name: ruststack-linux-x86_64
-          path: artifacts
-      
-      - name: Extract binary
-        run: |
-          cd artifacts
-          tar -xzf ruststack-linux-x86_64.tar.gz
-          chmod +x ruststack-linux-x86_64
-      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
