@@ -9,6 +9,8 @@ members = [
     "ruststack-lambda",
     "ruststack-secretsmanager",
     "ruststack-iam",
+    "ruststack-apigateway",
+    "ruststack-firehose",
 ]
 
 [workspace.package]

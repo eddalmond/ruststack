@@ -22,6 +22,8 @@ A high-fidelity AWS local emulator written in Rust. Drop-in replacement for Loca
 | **CloudWatch Logs** | Groups, streams, events | For Lambda log retrieval |
 | **Secrets Manager** | Create, get, put, delete, list | Version stages (AWSCURRENT/AWSPREVIOUS) |
 | **IAM** | Roles, policies, attachments | Stub implementation (no enforcement) |
+| **API Gateway V2** | APIs, routes, integrations, stages | HTTP APIs |
+| **Kinesis Firehose** | Delivery streams, put records | In-memory buffering |
 
 ## Quick Start
 
@@ -200,6 +202,18 @@ curl http://localhost:4566/_localstack/health
 - AttachRolePolicy, DetachRolePolicy, ListAttachedRolePolicies
 - Note: IAM is a stub — policies are stored but not enforced
 
+### API Gateway V2 (HTTP APIs)
+- CreateApi, GetApi, DeleteApi, GetApis
+- CreateRoute, GetRoute, DeleteRoute, GetRoutes
+- CreateIntegration, GetIntegration, DeleteIntegration, GetIntegrations
+- CreateStage, GetStage, DeleteStage, GetStages
+
+### Kinesis Firehose
+- CreateDeliveryStream, DeleteDeliveryStream
+- DescribeDeliveryStream, ListDeliveryStreams
+- PutRecord, PutRecordBatch
+- Note: Records are buffered in memory (not actually delivered to S3)
+
 ## Docker
 
 ```dockerfile
@@ -238,8 +252,8 @@ docker run -p 4566:4566 ruststack
 
 ## Project Stats
 
-- **~15,000 lines** of Rust
-- **230+ tests** with comprehensive coverage
+- **~17,500 lines** of Rust
+- **240+ tests** with comprehensive coverage
 - **CI/CD** via GitHub Actions
 
 ## Releases

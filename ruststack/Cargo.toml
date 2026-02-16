@@ -13,6 +13,8 @@ ruststack-dynamodb = { path = "../ruststack-dynamodb" }
 ruststack-lambda = { path = "../ruststack-lambda" }
 ruststack-secretsmanager = { path = "../ruststack-secretsmanager" }
 ruststack-iam = { path = "../ruststack-iam" }
+ruststack-apigateway = { path = "../ruststack-apigateway" }
+ruststack-firehose = { path = "../ruststack-firehose" }
 
 tokio.workspace = true
 axum.workspace = true

@@ -97,9 +97,9 @@ RustStack has achieved its MVP milestone. This document tracks what's been imple
 
 | Metric | Value |
 |--------|-------|
-| Lines of Rust | ~15,000 |
-| Test count | 230+ |
-| Crates | 9 |
+| Lines of Rust | ~17,500 |
+| Test count | 240+ |
+| Crates | 11 |
 | CI status | ✅ Green |
 
 ---
@@ -114,28 +114,35 @@ RustStack has achieved its MVP milestone. This document tracks what's been imple
 - [x] IAM policies (CreatePolicy, GetPolicy, DeletePolicy)
 - [x] Role-policy attachment (AttachRolePolicy, DetachRolePolicy, ListAttachedRolePolicies)
 
-### Phase 6: Persistence
+### Phase 6: API Gateway & Firehose ✅
+
+- [x] API Gateway V2 HTTP APIs (CreateApi, GetApi, DeleteApi, ListApis)
+- [x] Routes (CreateRoute, GetRoute, DeleteRoute, ListRoutes)
+- [x] Integrations (CreateIntegration, GetIntegration, DeleteIntegration, ListIntegrations)
+- [x] Stages (CreateStage, GetStage, DeleteStage, ListStages)
+- [x] Kinesis Firehose delivery streams (CreateDeliveryStream, DeleteDeliveryStream, DescribeDeliveryStream, ListDeliveryStreams)
+- [x] PutRecord, PutRecordBatch
+
+### Phase 7: Persistence
 
 - [ ] File-system storage backend for S3
 - [ ] SQLite storage backend for DynamoDB
 - [ ] `--data-dir` CLI option
 - [ ] State recovery on restart
 
-### Phase 7: Enhanced Lambda
+### Phase 8: Enhanced Lambda
 
 - [ ] Docker container execution (alternative to subprocess)
 - [ ] Node.js runtime support
 - [ ] Lambda layers
 - [ ] Provisioned concurrency simulation
 
-### Phase 8: Additional Services
+### Phase 9: Additional Services
 
 - [ ] SQS (queues, messages)
 - [ ] SNS (topics, subscriptions)
-- [ ] API Gateway (REST API + Lambda integration)
-- [ ] Kinesis Firehose (delivery streams)
 
-### Phase 9: Performance & Production
+### Phase 10: Performance & Production
 
 - [ ] Benchmarks vs LocalStack
 - [ ] Memory optimization
@@ -148,16 +155,15 @@ RustStack has achieved its MVP milestone. This document tracks what's been imple
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                       HTTP Gateway (Axum)                             │
-│                          Port 4566                                    │
-│  Routes: /health, S3, DynamoDB, Lambda, Logs, SecretsManager, IAM    │
-└───┬──────┬──────┬──────┬──────┬──────────────┬───────────────────────┘
-    │      │      │      │      │              │
-┌───▼──┐┌──▼───┐┌─▼────┐┌▼────┐┌▼───────────┐┌─▼──┐
-│  S3  ││Dynamo││Lambda││Logs ││SecretsMan. ││IAM │
-│      ││  DB  ││      ││     ││            ││    │
-└──────┘└──────┘└──────┘└─────┘└────────────┘└────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         HTTP Gateway (Axum)                                 │
+│                            Port 4566                                        │
+│  Routes: /health, S3, DynamoDB, Lambda, Logs, Secrets, IAM, APIGW, Firehose│
+└──┬────┬────┬────┬────┬─────────┬───┬────────┬─────────────────────────────┘
+   │    │    │    │    │         │   │        │
+┌──▼─┐┌─▼──┐┌▼───┐┌▼──┐┌▼──────┐┌▼─┐┌▼─────┐┌─▼──────┐
+│ S3 ││DDB ││λ   ││Log││Secrets││IAM││APIGW ││Firehose│
+└────┘└────┘└────┘└───┘└───────┘└───┘└──────┘└────────┘
 ```
 
 ---
@@ -174,6 +180,8 @@ ruststack/
 ├── ruststack-lambda/       # Lambda service + invocation
 ├── ruststack-secretsmanager/ # Secrets Manager service
 ├── ruststack-iam/          # IAM roles & policies (stub)
+├── ruststack-apigateway/   # API Gateway V2 HTTP APIs
+├── ruststack-firehose/     # Kinesis Firehose delivery streams
 └── tests/                  # Integration tests
 ```
 

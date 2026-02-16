@@ -14,7 +14,9 @@ use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
+use ruststack_apigateway::{handlers as apigateway_handlers, ApiGatewayState};
 use ruststack_dynamodb::{handlers as dynamodb_handlers, DynamoDBState, DynamoDBStorage};
+use ruststack_firehose::{handlers as firehose_handlers, FirehoseState};
 use ruststack_iam::{handlers as iam_handlers, IamState};
 use ruststack_lambda::{
     handlers::{
@@ -39,6 +41,8 @@ pub struct AppState {
     cloudwatch_logs: Arc<CloudWatchLogsState>,
     secretsmanager: Arc<SecretsManagerState>,
     iam: Arc<IamState>,
+    apigateway: Arc<ApiGatewayState>,
+    firehose: Arc<FirehoseState>,
     s3_enabled: bool,
     dynamodb_enabled: bool,
     lambda_enabled: bool,
@@ -57,6 +61,8 @@ impl AppState {
             cloudwatch_logs,
             secretsmanager: Arc::new(SecretsManagerState::new()),
             iam: Arc::new(IamState::new()),
+            apigateway: Arc::new(ApiGatewayState::new()),
+            firehose: Arc::new(FirehoseState::new()),
             s3_enabled,
             dynamodb_enabled,
             lambda_enabled,
@@ -112,12 +118,33 @@ pub fn create_router(state: AppState) -> Router {
             post(invoke_function),
         );
 
+    // API Gateway V2 routes
+    let apigateway_routes = Router::new()
+        .route("/v2/apis", post(apigw_create_api))
+        .route("/v2/apis", get(apigw_list_apis))
+        .route("/v2/apis/:api_id", get(apigw_get_api))
+        .route("/v2/apis/:api_id", delete(apigw_delete_api))
+        .route("/v2/apis/:api_id/routes", post(apigw_create_route))
+        .route("/v2/apis/:api_id/routes", get(apigw_list_routes))
+        .route("/v2/apis/:api_id/routes/:route_id", get(apigw_get_route))
+        .route("/v2/apis/:api_id/routes/:route_id", delete(apigw_delete_route))
+        .route("/v2/apis/:api_id/integrations", post(apigw_create_integration))
+        .route("/v2/apis/:api_id/integrations", get(apigw_list_integrations))
+        .route("/v2/apis/:api_id/integrations/:integration_id", get(apigw_get_integration))
+        .route("/v2/apis/:api_id/integrations/:integration_id", delete(apigw_delete_integration))
+        .route("/v2/apis/:api_id/stages", post(apigw_create_stage))
+        .route("/v2/apis/:api_id/stages", get(apigw_list_stages))
+        .route("/v2/apis/:api_id/stages/:stage_name", get(apigw_get_stage))
+        .route("/v2/apis/:api_id/stages/:stage_name", delete(apigw_delete_stage));
+
     Router::new()
         // Health check endpoint
         .route("/health", get(health_check))
         .route("/_localstack/health", get(health_check)) // LocalStack compatibility
         // Lambda routes (before S3 catch-all)
         .merge(lambda_routes)
+        // API Gateway V2 routes
+        .merge(apigateway_routes)
         // S3 routes (catch-all)
         .route("/", any(handle_root))
         .route("/:bucket", any(handle_bucket))
@@ -132,7 +159,7 @@ async fn health_check() -> Response {
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(
-            r#"{"status": "running", "services": {"s3": "available", "dynamodb": "available", "lambda": "available", "logs": "available", "secretsmanager": "available", "iam": "available"}}"#,
+            r#"{"status": "running", "services": {"s3": "available", "dynamodb": "available", "lambda": "available", "logs": "available", "secretsmanager": "available", "iam": "available", "apigatewayv2": "available", "firehose": "available"}}"#,
         ))
         .unwrap()
 }
@@ -280,6 +307,15 @@ async fn handle_root(
                 )
                 .await;
             }
+            // Kinesis Firehose
+            if target_str.starts_with("Firehose_") {
+                return firehose_handlers::handle_request(
+                    State(state.firehose.clone()),
+                    headers,
+                    body,
+                )
+                .await;
+            }
         }
     }
 
@@ -371,4 +407,150 @@ fn service_disabled(service: &str) -> Response {
         .status(StatusCode::SERVICE_UNAVAILABLE)
         .body(Body::from(format!("Service '{}' is disabled", service)))
         .unwrap()
+}
+
+// === API Gateway V2 handlers ===
+
+async fn apigw_create_api(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::POST, "/apis", headers, body).await
+}
+
+async fn apigw_list_apis(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Response {
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, "/apis", headers, Bytes::new()).await
+}
+
+async fn apigw_get_api(
+    State(state): State<Arc<AppState>>,
+    Path(api_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}", api_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_delete_api(
+    State(state): State<Arc<AppState>>,
+    Path(api_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}", api_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::DELETE, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_create_route(
+    State(state): State<Arc<AppState>>,
+    Path(api_id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let path = format!("/apis/{}/routes", api_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::POST, &path, headers, body).await
+}
+
+async fn apigw_list_routes(
+    State(state): State<Arc<AppState>>,
+    Path(api_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/routes", api_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_get_route(
+    State(state): State<Arc<AppState>>,
+    Path((api_id, route_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/routes/{}", api_id, route_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_delete_route(
+    State(state): State<Arc<AppState>>,
+    Path((api_id, route_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/routes/{}", api_id, route_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::DELETE, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_create_integration(
+    State(state): State<Arc<AppState>>,
+    Path(api_id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let path = format!("/apis/{}/integrations", api_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::POST, &path, headers, body).await
+}
+
+async fn apigw_list_integrations(
+    State(state): State<Arc<AppState>>,
+    Path(api_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/integrations", api_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_get_integration(
+    State(state): State<Arc<AppState>>,
+    Path((api_id, integration_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/integrations/{}", api_id, integration_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_delete_integration(
+    State(state): State<Arc<AppState>>,
+    Path((api_id, integration_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/integrations/{}", api_id, integration_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::DELETE, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_create_stage(
+    State(state): State<Arc<AppState>>,
+    Path(api_id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let path = format!("/apis/{}/stages", api_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::POST, &path, headers, body).await
+}
+
+async fn apigw_list_stages(
+    State(state): State<Arc<AppState>>,
+    Path(api_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/stages", api_id);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_get_stage(
+    State(state): State<Arc<AppState>>,
+    Path((api_id, stage_name)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/stages/{}", api_id, stage_name);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::GET, &path, headers, Bytes::new()).await
+}
+
+async fn apigw_delete_stage(
+    State(state): State<Arc<AppState>>,
+    Path((api_id, stage_name)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    let path = format!("/apis/{}/stages/{}", api_id, stage_name);
+    apigateway_handlers::handle_request(State(state.apigateway.clone()), Method::DELETE, &path, headers, Bytes::new()).await
 }
