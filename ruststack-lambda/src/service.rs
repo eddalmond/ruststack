@@ -1,5 +1,6 @@
 //! Lambda service implementation
 
+use crate::docker::{DockerExecutor, DockerExecutorConfig, ExecutorMode};
 use crate::function::{Function, FunctionCode, FunctionConfig, FunctionState, Runtime};
 use crate::invocation::{InvocationError, InvocationResult, InvocationType, LambdaContext};
 use base64::{engine::general_purpose, Engine};
@@ -14,6 +15,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use thiserror::Error;
 use tokio::process::Command;
+use tokio::sync::OnceCell;
 use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Error)]
@@ -41,6 +43,9 @@ pub enum LambdaServiceError {
 
     #[error("Zip extraction error: {0}")]
     ZipError(String),
+
+    #[error("Docker error: {0}")]
+    Docker(#[from] crate::docker::DockerError),
 }
 
 /// Lambda service managing functions and invocations
@@ -48,6 +53,12 @@ pub struct LambdaService {
     functions: DashMap<String, Arc<Function>>,
     /// Directory where extracted function code is stored
     code_dir: TempDir,
+    /// Execution mode
+    executor_mode: ExecutorMode,
+    /// Docker executor (lazily initialized)
+    docker_executor: OnceCell<DockerExecutor>,
+    /// Docker executor config
+    docker_config: DockerExecutorConfig,
 }
 
 impl Default for LambdaService {
@@ -58,14 +69,32 @@ impl Default for LambdaService {
 
 impl LambdaService {
     pub fn new() -> Self {
+        Self::with_mode(ExecutorMode::Subprocess)
+    }
+
+    /// Create a new LambdaService with the specified execution mode
+    pub fn with_mode(mode: ExecutorMode) -> Self {
+        Self::with_mode_and_config(mode, DockerExecutorConfig::default())
+    }
+
+    /// Create a new LambdaService with mode and Docker config
+    pub fn with_mode_and_config(mode: ExecutorMode, docker_config: DockerExecutorConfig) -> Self {
         Self {
             functions: DashMap::new(),
             code_dir: TempDir::new().expect("Failed to create temp dir for Lambda code"),
+            executor_mode: mode,
+            docker_executor: OnceCell::new(),
+            docker_config,
         }
     }
 
-    /// Get the code directory path for a function
-    fn function_code_path(&self, function_name: &str) -> PathBuf {
+    /// Get the current execution mode
+    pub fn executor_mode(&self) -> ExecutorMode {
+        self.executor_mode
+    }
+
+    /// Get the code directory path for a function (public for Docker executor)
+    pub fn function_code_path(&self, function_name: &str) -> PathBuf {
         self.code_dir.path().join(function_name)
     }
 
@@ -333,9 +362,66 @@ impl LambdaService {
             InvocationType::Event => {
                 // Async invocation - queue and return immediately
                 warn!("Async invocation not yet implemented, treating as sync");
-                self.invoke_subprocess(&function, payload).await
+                self.invoke_internal(&function, payload).await
             }
-            InvocationType::RequestResponse => self.invoke_subprocess(&function, payload).await,
+            InvocationType::RequestResponse => self.invoke_internal(&function, payload).await,
+        }
+    }
+
+    /// Determine whether to use Docker for this function
+    fn should_use_docker(&self, function: &Function) -> bool {
+        match self.executor_mode {
+            ExecutorMode::Subprocess => false,
+            ExecutorMode::Docker => true,
+            ExecutorMode::Auto => {
+                // Use Docker if:
+                // 1. Function has layers (dependencies)
+                // 2. Function has force-docker tag
+                // 3. Runtime is not Python (Node.js, etc.)
+                // For now, just check if it's a non-Python runtime
+                !matches!(
+                    function.config.runtime,
+                    Runtime::Python39
+                        | Runtime::Python310
+                        | Runtime::Python311
+                        | Runtime::Python312
+                        | Runtime::Python313
+                )
+            }
+        }
+    }
+
+    /// Get or initialize the Docker executor
+    async fn get_docker_executor(&self) -> &DockerExecutor {
+        self.docker_executor
+            .get_or_init(|| async { DockerExecutor::new(self.docker_config.clone()).await })
+            .await
+    }
+
+    /// Internal invoke that picks the right executor
+    async fn invoke_internal(
+        &self,
+        function: &Function,
+        payload: Bytes,
+    ) -> Result<InvocationResult, LambdaServiceError> {
+        if self.should_use_docker(function) {
+            let code_path = self.function_code_path(&function.config.function_name);
+            let executor = self.get_docker_executor().await;
+
+            if !executor.is_available() {
+                warn!(
+                    function = %function.config.function_name,
+                    "Docker not available, falling back to subprocess"
+                );
+                return self.invoke_subprocess(function, payload).await;
+            }
+
+            executor
+                .invoke(function, &code_path, payload)
+                .await
+                .map_err(LambdaServiceError::Docker)
+        } else {
+            self.invoke_subprocess(function, payload).await
         }
     }
 

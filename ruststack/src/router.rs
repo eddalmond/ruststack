@@ -50,6 +50,22 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(s3_enabled: bool, dynamodb_enabled: bool, lambda_enabled: bool) -> Self {
+        Self::new_with_lambda_config(
+            s3_enabled,
+            dynamodb_enabled,
+            lambda_enabled,
+            ruststack_lambda::ExecutorMode::Subprocess,
+            ruststack_lambda::DockerExecutorConfig::default(),
+        )
+    }
+
+    pub fn new_with_lambda_config(
+        s3_enabled: bool,
+        dynamodb_enabled: bool,
+        lambda_enabled: bool,
+        lambda_executor: ruststack_lambda::ExecutorMode,
+        docker_config: ruststack_lambda::DockerExecutorConfig,
+    ) -> Self {
         let storage: Arc<dyn ObjectStorage> = Arc::new(EphemeralStorage::new());
         let cloudwatch_logs = Arc::new(CloudWatchLogsState::new());
         Self {
@@ -57,7 +73,7 @@ impl AppState {
             dynamodb: Arc::new(DynamoDBState {
                 storage: Arc::new(DynamoDBStorage::new()),
             }),
-            lambda: Arc::new(LambdaState::new()),
+            lambda: Arc::new(LambdaState::new_with_config(lambda_executor, docker_config)),
             cloudwatch_logs,
             secretsmanager: Arc::new(SecretsManagerState::new()),
             iam: Arc::new(IamState::new()),

@@ -130,10 +130,13 @@ RustStack has achieved its MVP milestone. This document tracks what's been imple
 - [ ] `--data-dir` CLI option
 - [ ] State recovery on restart
 
-### Phase 8: Enhanced Lambda
+### Phase 8: Enhanced Lambda ✅
 
-- [ ] Docker container execution (alternative to subprocess)
-- [ ] Node.js runtime support
+- [x] Docker container execution (alternative to subprocess)
+- [x] Warm container pooling for reduced cold starts
+- [x] CLI options for executor mode (--lambda-executor)
+- [x] Docker configuration options (TTL, max containers, network)
+- [ ] Node.js runtime support (via Docker)
 - [ ] Lambda layers
 - [ ] Provisioned concurrency simulation
 

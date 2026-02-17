@@ -18,7 +18,7 @@ A high-fidelity AWS local emulator written in Rust. Drop-in replacement for Loca
 |---------|-----------|-------|
 | **S3** | Buckets, objects, multipart upload, copy | XML responses, proper ETags |
 | **DynamoDB** | Tables, items, query, scan, batch ops | Full expression support |
-| **Lambda** | CRUD, invoke, environment vars | Python subprocess execution |
+| **Lambda** | CRUD, invoke, environment vars | Python subprocess or Docker execution |
 | **CloudWatch Logs** | Groups, streams, events | For Lambda log retrieval |
 | **Secrets Manager** | Create, get, put, delete, list | Version stages (AWSCURRENT/AWSPREVIOUS) |
 | **IAM** | Roles, policies, attachments | Stub implementation (no enforcement) |
@@ -152,10 +152,36 @@ response = lambda_client.invoke(
 Usage: ruststack [OPTIONS]
 
 Options:
-  -p, --port <PORT>            Port to listen on [default: 4566]
-      --host <HOST>            Host to bind to [default: 0.0.0.0]
-  -h, --help                   Print help
+  -p, --port <PORT>                    Port to listen on [default: 4566]
+      --host <HOST>                    Host to bind to [default: 0.0.0.0]
+      --lambda-executor <MODE>         Lambda executor: subprocess, docker, auto [default: subprocess]
+      --lambda-container-ttl <SECS>    Docker container TTL for warm pool [default: 300]
+      --lambda-max-containers <N>      Maximum concurrent Lambda containers [default: 10]
+      --lambda-network <MODE>          Docker network mode: bridge or host [default: bridge]
+  -h, --help                           Print help
 ```
+
+## Lambda Execution Modes
+
+RustStack supports two Lambda execution modes:
+
+| Mode | Cold Start | Isolation | Dependencies |
+|------|------------|-----------|--------------|
+| **subprocess** (default) | ~10-50ms | None | Must be installed on host |
+| **docker** | ~500ms-2s | Full container | Bundled in container |
+
+```bash
+# Fast development mode (subprocess)
+ruststack
+
+# Isolated mode (Docker containers)
+ruststack --lambda-executor docker
+
+# Auto mode (Docker for non-Python runtimes)
+ruststack --lambda-executor auto
+```
+
+See [docs/DOCKER_LAMBDA.md](docs/DOCKER_LAMBDA.md) for detailed Docker configuration.
 
 ## Health Check
 
@@ -238,6 +264,10 @@ docker run -p 4566:4566 ruststack
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `RUST_LOG` | Log level/filter | info |
+| `RUSTSTACK_LAMBDA_EXECUTOR` | Lambda executor mode | subprocess |
+| `RUSTSTACK_LAMBDA_CONTAINER_TTL` | Docker warm container TTL (seconds) | 300 |
+| `RUSTSTACK_LAMBDA_MAX_CONTAINERS` | Max concurrent Lambda containers | 10 |
+| `RUSTSTACK_LAMBDA_NETWORK` | Docker network mode | bridge |
 
 ## Differences from LocalStack
 
@@ -245,8 +275,8 @@ docker run -p 4566:4566 ruststack
 |---|-----------|------------|
 | Startup | ~10ms | ~5-10s |
 | Memory | ~50MB | ~300MB+ |
-| Dependencies | None | Docker, Java |
-| Lambda execution | Subprocess | Container |
+| Dependencies | None (Docker optional) | Docker, Java |
+| Lambda execution | Subprocess or Docker | Container |
 | Persistence | In-memory | Optional |
 | Services | S3, DynamoDB, Lambda, Logs | 80+ |
 

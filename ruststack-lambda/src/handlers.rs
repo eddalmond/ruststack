@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
+use crate::docker::{DockerExecutorConfig, ExecutorMode};
 use crate::function::{Function, FunctionCode, FunctionConfig, Runtime};
 use crate::invocation::InvocationType;
 use crate::service::{LambdaService, LambdaServiceError};
@@ -28,6 +29,12 @@ impl LambdaState {
     pub fn new() -> Self {
         Self {
             service: LambdaService::new(),
+        }
+    }
+
+    pub fn new_with_config(executor_mode: ExecutorMode, docker_config: DockerExecutorConfig) -> Self {
+        Self {
+            service: LambdaService::with_mode_and_config(executor_mode, docker_config),
         }
     }
 }
