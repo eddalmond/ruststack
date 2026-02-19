@@ -26,6 +26,7 @@ pub struct LambdaState {
 }
 
 impl LambdaState {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             service: LambdaService::new(),
