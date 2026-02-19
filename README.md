@@ -25,6 +25,7 @@ A high-fidelity AWS local emulator written in Rust. Drop-in replacement for Loca
 | **API Gateway V2** | APIs, routes, integrations, stages | HTTP APIs |
 | **Kinesis Firehose** | Delivery streams, put records | In-memory buffering |
 | **SQS** | Queues, send, receive, delete messages | In-memory queue storage |
+| **SNS** | Topics, subscriptions, publish | Pub/sub messaging |
 
 ## Quick Start
 
@@ -60,6 +61,10 @@ lambda_client = boto3.client("lambda", endpoint_url=endpoint_url,
 
 # SQS
 sqs = boto3.client("sqs", endpoint_url=endpoint_url,
+    aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
+
+# SNS
+sns = boto3.client("sns", endpoint_url=endpoint_url,
     aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
 ```
 
