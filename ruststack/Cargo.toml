@@ -16,6 +16,7 @@ ruststack-iam = { path = "../ruststack-iam" }
 ruststack-apigateway = { path = "../ruststack-apigateway" }
 ruststack-firehose = { path = "../ruststack-firehose" }
 ruststack-sqs = { path = "../ruststack-sqs" }
+ruststack-sns = { path = "../ruststack-sns" }
 
 tokio.workspace = true
 axum.workspace = true

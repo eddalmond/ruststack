@@ -30,6 +30,7 @@ use ruststack_s3::{
     storage::{EphemeralStorage, ObjectStorage},
 };
 use ruststack_secretsmanager::{handlers as secrets_handlers, SecretsManagerState};
+use ruststack_sns::{handlers as sns_handlers, SnsState};
 use ruststack_sqs::{handlers as sqs_handlers, SqsState};
 
 use crate::cloudwatch::{self, CloudWatchLogsState};
@@ -45,6 +46,7 @@ pub struct AppState {
     apigateway: Arc<ApiGatewayState>,
     firehose: Arc<FirehoseState>,
     sqs: Arc<SqsState>,
+    sns: Arc<SnsState>,
     s3_enabled: bool,
     dynamodb_enabled: bool,
     lambda_enabled: bool,
@@ -83,6 +85,7 @@ impl AppState {
             apigateway: Arc::new(ApiGatewayState::new()),
             firehose: Arc::new(FirehoseState::new()),
             sqs: Arc::new(ruststack_sqs::SqsState::new()),
+            sns: Arc::new(ruststack_sns::SnsState::new()),
             s3_enabled,
             dynamodb_enabled,
             lambda_enabled,
@@ -197,7 +200,7 @@ async fn health_check() -> Response {
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(
-            r#"{"status": "running", "services": {"s3": "available", "dynamodb": "available", "lambda": "available", "logs": "available", "secretsmanager": "available", "iam": "available", "apigatewayv2": "available", "firehose": "available", "sqs": "available"}}"#,
+            r#"{"status": "running", "services": {"s3": "available", "dynamodb": "available", "lambda": "available", "logs": "available", "secretsmanager": "available", "iam": "available", "apigatewayv2": "available", "firehose": "available", "sqs": "available", "sns": "available"}}"#,
         ))
         .unwrap()
 }
@@ -348,6 +351,10 @@ async fn handle_root(
             // SQS
             if target_str.starts_with("AmazonSQS") {
                 return sqs_handlers::handle_request(State(state.sqs.clone()), headers, body).await;
+            }
+            // SNS
+            if target_str.starts_with("AmazonSNS") {
+                return sns_handlers::handle_request(State(state.sns.clone()), headers, body).await;
             }
             // Kinesis Firehose
             if target_str.starts_with("Firehose_") {

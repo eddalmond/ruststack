@@ -12,6 +12,7 @@ members = [
     "ruststack-apigateway",
     "ruststack-firehose",
     "ruststack-sqs",
+    "ruststack-sns",
 ]
 
 [workspace.package]
