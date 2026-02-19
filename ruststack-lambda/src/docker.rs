@@ -49,13 +49,15 @@ pub enum ExecutorMode {
     Auto,
 }
 
-impl ExecutorMode {
-    pub fn from_str(s: &str) -> Option<Self> {
+impl std::str::FromStr for ExecutorMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "subprocess" | "process" | "native" => Some(Self::Subprocess),
-            "docker" | "container" => Some(Self::Docker),
-            "auto" | "hybrid" => Some(Self::Auto),
-            _ => None,
+            "subprocess" | "process" | "native" => Ok(Self::Subprocess),
+            "docker" | "container" => Ok(Self::Docker),
+            "auto" | "hybrid" => Ok(Self::Auto),
+            _ => Err(()),
         }
     }
 }
@@ -76,6 +78,7 @@ pub fn runtime_image(runtime: &Runtime) -> &'static str {
 }
 
 /// Warm container entry
+#[allow(dead_code)]
 struct WarmContainer {
     container_id: String,
     function_name: String,
@@ -242,7 +245,10 @@ impl DockerExecutor {
 
         // Add Lambda-specific env vars
         let lambda_env = [
-            ("AWS_LAMBDA_FUNCTION_NAME", function.config.function_name.as_str()),
+            (
+                "AWS_LAMBDA_FUNCTION_NAME",
+                function.config.function_name.as_str(),
+            ),
             ("AWS_LAMBDA_FUNCTION_VERSION", function.version.as_str()),
             (
                 "AWS_LAMBDA_FUNCTION_MEMORY_SIZE",
@@ -293,9 +299,7 @@ impl DockerExecutor {
             return Err(DockerError::StartFailed(stderr.to_string()));
         }
 
-        let container_id = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .to_string();
+        let container_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
         info!(
             container_id = %container_id,
@@ -468,14 +472,7 @@ except Exception as e:
         let output = tokio::time::timeout(
             Duration::from_secs(timeout_secs),
             Command::new("docker")
-                .args([
-                    "exec",
-                    "-i",
-                    &container_id,
-                    "python3",
-                    "-c",
-                    &invoke_script,
-                ])
+                .args(["exec", "-i", &container_id, "python3", "-c", &invoke_script])
                 .output(),
         )
         .await;
@@ -576,15 +573,12 @@ mod tests {
 
     #[test]
     fn test_executor_mode_from_str() {
+        assert_eq!("docker".parse::<ExecutorMode>(), Ok(ExecutorMode::Docker));
         assert_eq!(
-            ExecutorMode::from_str("docker"),
-            Some(ExecutorMode::Docker)
+            "subprocess".parse::<ExecutorMode>(),
+            Ok(ExecutorMode::Subprocess)
         );
-        assert_eq!(
-            ExecutorMode::from_str("subprocess"),
-            Some(ExecutorMode::Subprocess)
-        );
-        assert_eq!(ExecutorMode::from_str("auto"), Some(ExecutorMode::Auto));
-        assert_eq!(ExecutorMode::from_str("invalid"), None);
+        assert_eq!("auto".parse::<ExecutorMode>(), Ok(ExecutorMode::Auto));
+        assert!("invalid".parse::<ExecutorMode>().is_err());
     }
 }
