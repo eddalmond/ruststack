@@ -66,6 +66,27 @@ sqs = boto3.client("sqs", endpoint_url=endpoint_url,
 # SNS
 sns = boto3.client("sns", endpoint_url=endpoint_url,
     aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
+
+## Testing
+
+Use the `ruststack-test` crate for integration tests:
+
+```rust
+use ruststack_test::{TestServer, RustStackClient};
+
+#[tokio::test]
+async fn test_sqs() {
+    let server = TestServer::start().await.unwrap();
+    let client = server.client();
+    
+    // Create queue and send message
+    let queue_url = client.create_queue("my-queue").await.unwrap();
+    client.send_message(&queue_url, "Hello!").await.unwrap();
+    
+    // Reset state between tests
+    server.reset().await;
+}
+```
 ```
 
 ## pytest Fixture
