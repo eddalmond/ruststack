@@ -24,6 +24,7 @@ A high-fidelity AWS local emulator written in Rust. Drop-in replacement for Loca
 | **IAM** | Roles, policies, attachments | Stub implementation (no enforcement) |
 | **API Gateway V2** | APIs, routes, integrations, stages | HTTP APIs |
 | **Kinesis Firehose** | Delivery streams, put records | In-memory buffering |
+| **SQS** | Queues, send, receive, delete messages | In-memory queue storage |
 
 ## Quick Start
 
@@ -55,6 +56,10 @@ dynamodb = boto3.client("dynamodb", endpoint_url=endpoint_url,
 
 # Lambda
 lambda_client = boto3.client("lambda", endpoint_url=endpoint_url,
+    aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
+
+# SQS
+sqs = boto3.client("sqs", endpoint_url=endpoint_url,
     aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
 ```
 
