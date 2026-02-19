@@ -76,8 +76,10 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Parse Lambda executor mode
-    let lambda_executor = ruststack_lambda::ExecutorMode::from_str(&args.lambda_executor)
-        .unwrap_or_else(|| {
+    let lambda_executor = args
+        .lambda_executor
+        .parse::<ruststack_lambda::ExecutorMode>()
+        .unwrap_or_else(|_| {
             tracing::warn!(
                 "Unknown lambda executor '{}', defaulting to subprocess",
                 args.lambda_executor

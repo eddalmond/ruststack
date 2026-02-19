@@ -573,10 +573,7 @@ mod tests {
 
     #[test]
     fn test_executor_mode_from_str() {
-        assert_eq!(
-            "docker".parse::<ExecutorMode>(),
-            Ok(ExecutorMode::Docker)
-        );
+        assert_eq!("docker".parse::<ExecutorMode>(), Ok(ExecutorMode::Docker));
         assert_eq!(
             "subprocess".parse::<ExecutorMode>(),
             Ok(ExecutorMode::Subprocess)
