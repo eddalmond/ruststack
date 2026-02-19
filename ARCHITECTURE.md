@@ -58,12 +58,12 @@ fn detect_service(headers: &HeaderMap, path: &str) -> Service {
             return Service::DynamoDB;
         }
     }
-    
+
     // Lambda: path starts with /2015-03-31/functions
     if path.starts_with("/2015-03-31/functions") {
         return Service::Lambda;
     }
-    
+
     // Default: S3
     Service::S3
 }
@@ -80,12 +80,12 @@ pub struct RustStackS3 {
 
 #[async_trait]
 impl s3s::S3 for RustStackS3 {
-    async fn get_object(&self, req: S3Request<GetObjectInput>) 
-        -> S3Result<S3Response<GetObjectOutput>> 
+    async fn get_object(&self, req: S3Request<GetObjectInput>)
+        -> S3Result<S3Response<GetObjectOutput>>
     {
         let bucket = &req.input.bucket;
         let key = &req.input.key;
-        
+
         let object = self.storage
             .get_object(bucket, key, None)
             .await
@@ -94,14 +94,14 @@ impl s3s::S3 for RustStackS3 {
                 StorageError::ObjectNotFound { .. } => s3_error!(NoSuchKey),
                 _ => s3_error!(InternalError),
             })?;
-        
+
         // Handle range request
         let (body, content_range) = if let Some(range) = &req.input.range {
             self.apply_range(object.data, range)?
         } else {
             (object.data, None)
         };
-        
+
         Ok(S3Response::new(GetObjectOutput {
             body: Some(StreamingBlob::from(body)),
             content_length: Some(body.len() as i64),
@@ -111,7 +111,7 @@ impl s3s::S3 for RustStackS3 {
             ..Default::default()
         }))
     }
-    
+
     // ... other operations
 }
 ```
@@ -157,16 +157,16 @@ impl DynamoDBService {
             .body(body)
             .send()
             .await?;
-        
+
         // Fix ARNs in response
         let body = self.fix_arns(response.bytes().await?)?;
-        
+
         Ok(Response::builder()
             .status(response.status())
             .header("Content-Type", "application/x-amz-json-1.0")
             .body(body.into())?)
     }
-    
+
     fn fix_arns(&self, body: Bytes) -> Result<Bytes, DynamoDBError> {
         // Replace "arn:aws:dynamodb:ddblocal:000000000000:"
         // With    "arn:aws:dynamodb:us-east-1:000000000000:"
@@ -196,22 +196,22 @@ impl LambdaService {
     ) -> Result<InvocationResult, LambdaError> {
         let function = self.functions.get(function_name)
             .ok_or(LambdaError::FunctionNotFound)?;
-        
+
         // Get or create container
         let container = self.get_or_create_container(&function).await?;
-        
+
         // Send invocation via Runtime API
         let result = container.invoke(event).await?;
-        
+
         Ok(result)
     }
-    
+
     async fn get_or_create_container(&self, function: &Function) -> Result<Container, LambdaError> {
         // Check for warm container
         if let Some(container) = self.containers.get(&function.name) {
             return Ok(container.clone());
         }
-        
+
         // Create new container
         let container = self.docker.create_container(
             CreateContainerOptions { name: &format!("ruststack-{}", function.name) },
@@ -229,13 +229,13 @@ impl LambdaService {
                 ..Default::default()
             }
         ).await?;
-        
+
         // Start container
         self.docker.start_container(&container.id, None).await?;
-        
+
         // Wait for Runtime API to be ready
         self.wait_for_runtime_api(&container).await?;
-        
+
         Ok(container)
     }
 }
@@ -319,7 +319,7 @@ impl S3ErrorCode {
             Self::AccessDenied => StatusCode::FORBIDDEN,
         }
     }
-    
+
     pub fn to_xml(&self, message: &str, resource: Option<&str>) -> String {
         format!(r#"<?xml version="1.0" encoding="UTF-8"?>
 <Error>
@@ -369,19 +369,19 @@ Minimal configuration via environment variables:
 pub struct Config {
     /// Port to listen on (default: 4566)
     pub port: u16,
-    
+
     /// Enable S3 service (default: true)
     pub s3_enabled: bool,
-    
+
     /// Enable DynamoDB service (default: true)
     pub dynamodb_enabled: bool,
-    
+
     /// Enable Lambda service (default: true)
     pub lambda_enabled: bool,
-    
+
     /// DynamoDB Local JAR path (default: ./DynamoDBLocal.jar)
     pub dynamodb_local_path: PathBuf,
-    
+
     /// Docker socket (default: /var/run/docker.sock)
     pub docker_socket: PathBuf,
 }
@@ -477,15 +477,15 @@ Each module has inline tests:
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_put_get_object() {
         let storage = EphemeralStorage::new();
         storage.create_bucket("test").await.unwrap();
-        
+
         storage.put_object("test", "key", Bytes::from("data"), Default::default())
             .await.unwrap();
-        
+
         let obj = storage.get_object("test", "key", None).await.unwrap();
         assert_eq!(&obj.data[..], b"data");
     }
@@ -501,14 +501,14 @@ Test against running RustStack with AWS SDK:
 #[tokio::test]
 async fn test_s3_error_codes() {
     let client = create_test_client().await;
-    
+
     let err = client.get_object()
         .bucket("nonexistent-bucket")
         .key("key")
         .send()
         .await
         .unwrap_err();
-    
+
     // Verify error code
     assert!(err.to_string().contains("NoSuchBucket"));
 }

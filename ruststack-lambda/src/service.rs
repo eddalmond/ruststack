@@ -484,12 +484,12 @@ class LambdaContext:
 # Import and call handler
 try:
     from {module} import {handler}
-    
+
     event = json.loads('{event_json}')
     context = LambdaContext()
-    
+
     result = {handler}(event, context)
-    
+
     # Ensure result is JSON serializable
     if result is not None:
         print(json.dumps(result))

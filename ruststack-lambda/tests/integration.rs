@@ -158,12 +158,12 @@ import json
 def handler(event, context):
     """Handler that computes factorial."""
     n = event.get('n', 5)
-    
+
     def factorial(x):
         if x <= 1:
             return 1
         return x * factorial(x - 1)
-    
+
     result = factorial(n)
     return {
         'statusCode': 200,

@@ -39,61 +39,61 @@ def get_client(service: str):
 def test_health_check():
     """Test the health check endpoint."""
     print("Testing health check...")
-    
+
     response = requests.get(f"{ENDPOINT_URL}/health", timeout=10)
     assert response.status_code == 200, f"Health check failed: {response.status_code}"
-    
+
     data = response.json()
     assert data.get("status") == "running", f"Unexpected status: {data}"
-    
+
     print("✓ Health check passed")
 
 
 def test_s3_operations():
     """Test S3 bucket and object operations."""
     print("Testing S3 operations...")
-    
+
     s3 = get_client("s3")
     bucket_name = f"test-bucket-{uuid.uuid4().hex[:8]}"
     object_key = "test-object.txt"
     object_content = b"Hello, RustStack!"
-    
+
     try:
         # Create bucket
         s3.create_bucket(Bucket=bucket_name)
         print(f"  Created bucket: {bucket_name}")
-        
+
         # List buckets
         buckets = s3.list_buckets()
         bucket_names = [b["Name"] for b in buckets["Buckets"]]
         assert bucket_name in bucket_names, f"Bucket not found in list: {bucket_names}"
         print(f"  Listed buckets: {len(bucket_names)} buckets")
-        
+
         # Put object
         s3.put_object(Bucket=bucket_name, Key=object_key, Body=object_content)
         print(f"  Put object: {object_key}")
-        
+
         # Get object
         response = s3.get_object(Bucket=bucket_name, Key=object_key)
         retrieved_content = response["Body"].read()
         assert retrieved_content == object_content, "Object content mismatch"
         print(f"  Got object: {len(retrieved_content)} bytes")
-        
+
         # List objects
         response = s3.list_objects_v2(Bucket=bucket_name)
         objects = response.get("Contents", [])
         assert len(objects) == 1, f"Expected 1 object, got {len(objects)}"
         assert objects[0]["Key"] == object_key
         print(f"  Listed objects: {len(objects)} objects")
-        
+
         # Delete object
         s3.delete_object(Bucket=bucket_name, Key=object_key)
         print(f"  Deleted object: {object_key}")
-        
+
         # Delete bucket
         s3.delete_bucket(Bucket=bucket_name)
         print(f"  Deleted bucket: {bucket_name}")
-        
+
     except Exception as e:
         # Cleanup on failure
         try:
@@ -105,17 +105,17 @@ def test_s3_operations():
         except:
             pass
         raise e
-    
+
     print("✓ S3 operations passed")
 
 
 def test_dynamodb_operations():
     """Test DynamoDB table and item operations."""
     print("Testing DynamoDB operations...")
-    
+
     dynamodb = get_client("dynamodb")
     table_name = f"test-table-{uuid.uuid4().hex[:8]}"
-    
+
     try:
         # Create table
         dynamodb.create_table(
@@ -131,16 +131,16 @@ def test_dynamodb_operations():
             BillingMode="PAY_PER_REQUEST",
         )
         print(f"  Created table: {table_name}")
-        
+
         # Wait for table to be active (RustStack is fast, but let's be safe)
         time.sleep(0.5)
-        
+
         # Describe table
         response = dynamodb.describe_table(TableName=table_name)
         status = response["Table"]["TableStatus"]
         assert status == "ACTIVE", f"Table not active: {status}"
         print(f"  Table status: {status}")
-        
+
         # Put item
         item = {
             "pk": {"S": "user#123"},
@@ -151,7 +151,7 @@ def test_dynamodb_operations():
         }
         dynamodb.put_item(TableName=table_name, Item=item)
         print("  Put item")
-        
+
         # Get item
         response = dynamodb.get_item(
             TableName=table_name,
@@ -161,7 +161,7 @@ def test_dynamodb_operations():
         assert retrieved_item is not None, "Item not found"
         assert retrieved_item["name"]["S"] == "Test User"
         print("  Got item")
-        
+
         # Query
         response = dynamodb.query(
             TableName=table_name,
@@ -171,7 +171,7 @@ def test_dynamodb_operations():
         items = response.get("Items", [])
         assert len(items) == 1, f"Expected 1 item, got {len(items)}"
         print(f"  Query returned {len(items)} items")
-        
+
         # Update item
         dynamodb.update_item(
             TableName=table_name,
@@ -180,7 +180,7 @@ def test_dynamodb_operations():
             ExpressionAttributeValues={":age": {"N": "26"}},
         )
         print("  Updated item")
-        
+
         # Verify update
         response = dynamodb.get_item(
             TableName=table_name,
@@ -188,18 +188,18 @@ def test_dynamodb_operations():
         )
         assert response["Item"]["age"]["N"] == "26", "Update failed"
         print("  Verified update")
-        
+
         # Delete item
         dynamodb.delete_item(
             TableName=table_name,
             Key={"pk": {"S": "user#123"}, "sk": {"S": "profile"}},
         )
         print("  Deleted item")
-        
+
         # Delete table
         dynamodb.delete_table(TableName=table_name)
         print(f"  Deleted table: {table_name}")
-        
+
     except Exception as e:
         # Cleanup on failure
         try:
@@ -207,21 +207,21 @@ def test_dynamodb_operations():
         except:
             pass
         raise e
-    
+
     print("✓ DynamoDB operations passed")
 
 
 def test_lambda_api():
     """Test Lambda API responds (basic endpoint check)."""
     print("Testing Lambda API...")
-    
+
     lambda_client = get_client("lambda")
-    
+
     # List functions (should return empty list, but endpoint works)
     response = lambda_client.list_functions()
     functions = response.get("Functions", [])
     print(f"  Listed functions: {len(functions)} functions")
-    
+
     print("✓ Lambda API passed")
 
 
@@ -232,16 +232,16 @@ def main():
     print("=" * 60)
     print(f"Endpoint: {ENDPOINT_URL}")
     print()
-    
+
     tests = [
         test_health_check,
         test_s3_operations,
         test_dynamodb_operations,
         test_lambda_api,
     ]
-    
+
     failed = []
-    
+
     for test in tests:
         try:
             test()
@@ -250,9 +250,9 @@ def main():
             print(f"✗ {test.__name__} FAILED: {e}")
             print()
             failed.append((test.__name__, str(e)))
-    
+
     print("=" * 60)
-    
+
     if failed:
         print(f"FAILED: {len(failed)}/{len(tests)} tests")
         for name, error in failed:

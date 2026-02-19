@@ -25,23 +25,23 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: ruststack-macos-arm64
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-      
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
-      
+
       - name: Package binary (Unix)
         run: |
           mkdir -p dist
@@ -50,7 +50,7 @@ jobs:
           cd dist
           tar -czvf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }}
           sha256sum ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -63,50 +63,50 @@ jobs:
     needs: build
     permissions:
       contents: write
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-      
+
       - name: Prepare release files
         run: |
           mkdir -p release
           find artifacts -type f -name "*.tar.gz*" -exec cp {} release/ \;
           ls -la release/
-      
+
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           name: RustStack ${{ steps.version.outputs.version }}
           body: |
             ## RustStack ${{ steps.version.outputs.version }}
-            
+
             A high-fidelity AWS local emulator written in Rust.
-            
+
             ### Downloads
-            
+
             | Platform | File |
             |----------|------|
             | Linux x86_64 | `ruststack-linux-x86_64.tar.gz` |
             | macOS x86_64 | `ruststack-macos-x86_64.tar.gz` |
             | macOS ARM64 | `ruststack-macos-arm64.tar.gz` |
-            
+
             ### Verify checksums
-            
+
             ```bash
             sha256sum -c ruststack-*.tar.gz.sha256
             ```
-            
+
             ### Quick Start
-            
+
             ```bash
             tar -xzf ruststack-linux-x86_64.tar.gz
             chmod +x ruststack-linux-x86_64
@@ -124,24 +124,24 @@ jobs:
     permissions:
       contents: read
       packages: write
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Extract version
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:

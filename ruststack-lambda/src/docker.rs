@@ -436,7 +436,7 @@ class Context:
     aws_request_id = '{}'
     log_group_name = '/aws/lambda/{}'
     log_stream_name = '2024/01/01/[$LATEST]{}'
-    
+
     def get_remaining_time_in_millis(self):
         return {}
 

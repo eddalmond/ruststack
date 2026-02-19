@@ -31,7 +31,7 @@ crc32fast.workspace = true
 hex.workspace = true
 base64.workspace = true
 
-# Async trait  
+# Async trait
 async-trait.workspace = true
 
 [dev-dependencies]

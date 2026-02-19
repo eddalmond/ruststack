@@ -40,7 +40,7 @@ def create_item():
     data = request.get_json()
     if not data or 'name' not in data:
         return jsonify({'error': 'Name required'}), 400
-    
+
     import uuid
     item_id = str(uuid.uuid4())
     item = {
@@ -56,13 +56,13 @@ def update_item(item_id):
     """Update an existing item."""
     if item_id not in items:
         return jsonify({'error': 'Item not found'}), 404
-    
+
     data = request.get_json()
     if data.get('name'):
         items[item_id]['name'] = data['name']
     if data.get('description'):
         items[item_id]['description'] = data['description']
-    
+
     return jsonify(items[item_id])
 
 @app.route('/items/<item_id>', methods=['DELETE'])
@@ -70,7 +70,7 @@ def delete_item(item_id):
     """Delete an item."""
     if item_id not in items:
         return jsonify({'error': 'Item not found'}), 404
-    
+
     del items[item_id]
     return '', 204
 

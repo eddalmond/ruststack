@@ -49,7 +49,7 @@ endpoint_url = "http://localhost:4566"
 s3 = boto3.client("s3", endpoint_url=endpoint_url,
     aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
 
-# DynamoDB  
+# DynamoDB
 dynamodb = boto3.client("dynamodb", endpoint_url=endpoint_url,
     aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
 
@@ -76,7 +76,7 @@ def ruststack():
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    
+
     # Wait for ready
     for _ in range(30):
         try:
@@ -88,7 +88,7 @@ def ruststack():
     else:
         proc.kill()
         raise RuntimeError("RustStack failed to start")
-    
+
     yield "http://localhost:4566"
     proc.terminate()
     proc.wait()

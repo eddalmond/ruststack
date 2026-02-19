@@ -59,7 +59,7 @@ def wait_for_ruststack(endpoint: str, timeout: float = 30.0) -> bool:
 def ruststack_endpoint() -> Generator[str, None, None]:
     """
     Session-scoped fixture that provides RustStack endpoint URL.
-    
+
     Assumes RustStack is running via docker-compose.
     Start it with: docker-compose up -d ruststack
     """
@@ -75,21 +75,21 @@ def ruststack_endpoint() -> Generator[str, None, None]:
 def ruststack_process() -> Generator[str, None, None]:
     """
     Session-scoped fixture that starts RustStack as a subprocess.
-    
+
     Use this if you have the binary available locally and don't want Docker.
     Set RUSTSTACK_BINARY env var to the path of the binary.
     """
     binary = os.environ.get("RUSTSTACK_BINARY", "./target/release/ruststack")
-    
+
     if not os.path.exists(binary):
         pytest.skip(f"RustStack binary not found at {binary}")
-    
+
     proc = subprocess.Popen(
         [binary, "--host", "0.0.0.0", "--port", str(RUSTSTACK_PORT)],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    
+
     try:
         if not wait_for_ruststack(RUSTSTACK_ENDPOINT):
             proc.kill()
@@ -171,7 +171,7 @@ def dynamodb_table(dynamodb_client) -> Generator[str, None, None]:
     """Function-scoped DynamoDB table with simple key schema."""
     import uuid
     table_name = f"test-table-{uuid.uuid4().hex[:8]}"
-    
+
     dynamodb_client.create_table(
         TableName=table_name,
         KeySchema=[
@@ -185,7 +185,7 @@ def dynamodb_table(dynamodb_client) -> Generator[str, None, None]:
         BillingMode="PAY_PER_REQUEST",
     )
     yield table_name
-    
+
     try:
         dynamodb_client.delete_table(TableName=table_name)
     except Exception:

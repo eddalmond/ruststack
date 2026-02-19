@@ -348,13 +348,13 @@ Headers: `X-Amz-Function-Error: Unhandled`
 #[tokio::test]
 async fn test_get_nonexistent_key() {
     let client = create_s3_client().await;
-    
+
     let result = client.get_object()
         .bucket("test-bucket")
         .key("nonexistent")
         .send()
         .await;
-    
+
     let err = result.unwrap_err();
     // Must be NoSuchKey, not generic error
     assert!(err.to_string().contains("NoSuchKey"));
@@ -376,7 +376,7 @@ async fn test_list_objects_pagination() {
 #[tokio::test]
 async fn test_condition_expression_failure() {
     let client = create_dynamodb_client().await;
-    
+
     // Put item
     client.put_item()
         .table_name("test")
@@ -384,7 +384,7 @@ async fn test_condition_expression_failure() {
         .send()
         .await
         .unwrap();
-    
+
     // Put with condition that should fail
     let result = client.put_item()
         .table_name("test")
@@ -392,7 +392,7 @@ async fn test_condition_expression_failure() {
         .condition_expression("attribute_not_exists(pk)")
         .send()
         .await;
-    
+
     assert!(result.is_err());
     // Must be ConditionalCheckFailedException
 }

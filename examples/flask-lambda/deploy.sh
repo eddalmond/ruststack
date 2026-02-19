@@ -27,7 +27,7 @@ if aws lambda get-function \
     --endpoint-url "$ENDPOINT_URL" \
     --function-name "$FUNCTION_NAME" \
     --no-cli-pager 2>/dev/null; then
-    
+
     echo "Updating existing function..."
     aws lambda update-function-code \
         --endpoint-url "$ENDPOINT_URL" \

@@ -41,7 +41,7 @@ RustStack has achieved its MVP milestone. This document tracks what's been imple
 - [x] Local Secondary Index (LSI) support
 - [x] Full expression parser and evaluator:
   - KeyConditionExpression
-  - FilterExpression  
+  - FilterExpression
   - UpdateExpression (SET, REMOVE, ADD, DELETE)
   - ConditionExpression
   - ProjectionExpression
