@@ -32,7 +32,10 @@ impl LambdaState {
         }
     }
 
-    pub fn new_with_config(executor_mode: ExecutorMode, docker_config: DockerExecutorConfig) -> Self {
+    pub fn new_with_config(
+        executor_mode: ExecutorMode,
+        docker_config: DockerExecutorConfig,
+    ) -> Self {
         Self {
             service: LambdaService::with_mode_and_config(executor_mode, docker_config),
         }
