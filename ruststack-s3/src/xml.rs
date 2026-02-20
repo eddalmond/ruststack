@@ -172,7 +172,12 @@ pub fn format_create_multipart_upload(bucket: &str, key: &str, upload_id: &str) 
 }
 
 /// Format CompleteMultipartUpload response
-pub fn format_complete_multipart_upload(bucket: &str, key: &str, etag: &str, location: &str) -> String {
+pub fn format_complete_multipart_upload(
+    bucket: &str,
+    key: &str,
+    etag: &str,
+    location: &str,
+) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
@@ -192,7 +197,8 @@ pub fn format_complete_multipart_upload(bucket: &str, key: &str, etag: &str, loc
 pub fn format_abort_multipart_upload() -> String {
     r#"<?xml version="1.0" encoding="UTF-8"?>
 <AbortMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-</AbortMultipartUploadResult>"#.to_string()
+</AbortMultipartUploadResult>"#
+        .to_string()
 }
 
 /// Info about a multipart upload (for listing)
@@ -212,10 +218,7 @@ pub struct PartInfo {
 }
 
 /// Format ListMultipartUploads response
-pub fn format_list_multipart_uploads(
-    bucket: &str,
-    uploads: &[MultipartUploadInfo],
-) -> String {
+pub fn format_list_multipart_uploads(bucket: &str, uploads: &[MultipartUploadInfo]) -> String {
     let upload_entries: String = uploads
         .iter()
         .map(|u| {
@@ -260,12 +263,7 @@ pub fn format_list_multipart_uploads(
 }
 
 /// Format ListParts response
-pub fn format_list_parts(
-    bucket: &str,
-    key: &str,
-    upload_id: &str,
-    parts: &[PartInfo],
-) -> String {
+pub fn format_list_parts(bucket: &str, key: &str, upload_id: &str, parts: &[PartInfo]) -> String {
     let part_entries: String = parts
         .iter()
         .map(|p| {

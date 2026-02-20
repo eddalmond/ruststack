@@ -324,12 +324,12 @@ impl DockerExecutor {
                 "unzip -q -o /tmp/{}.zip -d /opt/ && rm /tmp/{}.zip",
                 layer_name, layer_name
             );
-            
+
             let extract_output = Command::new("docker")
                 .args(["exec", &container_id, "sh", "-c", &extract_cmd])
                 .output()
                 .await;
-            
+
             match extract_output {
                 Ok(output) if output.status.success() => {
                     debug!(layer = %layer_path, "Extracted layer to /opt/");

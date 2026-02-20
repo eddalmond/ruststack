@@ -7,13 +7,13 @@ use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
 use chrono::Utc;
 use dashmap::DashMap;
+use ruststack_s3::storage::ObjectStorage;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
-use ruststack_s3::storage::ObjectStorage;
 use thiserror::Error;
 use tokio::process::Command;
 use tokio::sync::OnceCell;
@@ -189,21 +189,31 @@ impl LambdaService {
 
                 (hash, size, Some(path))
             }
-            FunctionCode::S3 { bucket, key, version } => {
+            FunctionCode::S3 {
+                bucket,
+                key,
+                version,
+            } => {
                 // Fetch from S3
                 if let Some(ref s3) = self.s3_storage {
-                    let obj = s3.get_object(bucket, key, version.as_deref()).await
-                        .map_err(|e| LambdaServiceError::Internal(format!("Failed to fetch from S3: {}", e)))?;
-                    
+                    let obj = s3
+                        .get_object(bucket, key, version.as_deref())
+                        .await
+                        .map_err(|e| {
+                            LambdaServiceError::Internal(format!("Failed to fetch from S3: {}", e))
+                        })?;
+
                     let mut hasher = Sha256::new();
                     hasher.update(&obj.data);
                     let hash = general_purpose::STANDARD.encode(hasher.finalize());
                     let size = obj.data.len() as i64;
-                    
+
                     let path = self.extract_code(&config.function_name, &obj.data)?;
                     (hash, size, Some(path))
                 } else {
-                    return Err(LambdaServiceError::Internal("S3 storage not configured".to_string()));
+                    return Err(LambdaServiceError::Internal(
+                        "S3 storage not configured".to_string(),
+                    ));
                 }
             }
         };
