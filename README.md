@@ -18,7 +18,7 @@ A high-fidelity AWS local emulator written in Rust. Drop-in replacement for Loca
 |---------|-----------|-------|
 | **S3** | Buckets, objects, multipart upload, copy | XML responses, proper ETags |
 | **DynamoDB** | Tables, items, query, scan, batch ops | Full expression support |
-| **Lambda** | CRUD, invoke, environment vars | Python subprocess or Docker execution |
+| **Lambda** | CRUD, invoke, environment vars, layers | Python subprocess or Docker execution, S3 code deployment |
 | **CloudWatch Logs** | Groups, streams, events | For Lambda log retrieval |
 | **Secrets Manager** | Create, get, put, delete, list | Version stages (AWSCURRENT/AWSPREVIOUS) |
 | **IAM** | Roles, policies, attachments | Stub implementation (no enforcement) |
@@ -212,6 +212,55 @@ ruststack --lambda-executor docker
 ruststack --lambda-executor auto
 ```
 
+### Lambda Layers
+
+Lambda layers are supported in Docker mode. Layers are ZIP files that get extracted to `/opt/` inside the container:
+
+```python
+import boto3
+
+lambda_client = boto3.client("lambda", endpoint_url="http://localhost:4566",
+    aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
+
+lambda_client.create_function(
+    FunctionName='my-function',
+    Runtime='python3.12',
+    Handler='handler.main',
+    Role='arn:aws:iam::123456789012:role/lambda-role',
+    Code={
+        'ZipFile': open('function.zip', 'rb').read(),
+        # Local paths to layer ZIP files
+        'Layers': ['/path/to/numpy-layer.zip', '/path/to/shared-libs.zip']
+    }
+)
+```
+
+Layers are extracted to `/opt/` at container startup. Python automatically adds `/opt/python/lib/python3.X/site-packages/` to `PYTHONPATH`.
+
+### Lambda Deployment from S3
+
+You can deploy Lambda functions with code stored in S3:
+
+```python
+# First upload code to S3
+s3 = boto3.client("s3", endpoint_url="http://localhost:4566", ...)
+s3.put_object(Bucket='my-bucket', Key='function.zip', Body=open('function.zip', 'rb').read())
+
+# Create function with S3 code
+lambda_client.create_function(
+    FunctionName='my-function',
+    Runtime='python3.12',
+    Handler='handler.main',
+    Role='arn:aws:iam::123456789012:role/lambda-role',
+    Code={
+        'S3Bucket': 'my-bucket',
+        'S3Key': 'function.zip'
+    }
+)
+```
+
+This is useful for large functions or when you want to share code between environments.
+
 See [docs/DOCKER_LAMBDA.md](docs/DOCKER_LAMBDA.md) for detailed Docker configuration.
 
 ## Health Check
@@ -229,6 +278,7 @@ curl http://localhost:4566/_localstack/health
 - PutObject, GetObject, DeleteObject, HeadObject, CopyObject
 - ListObjects, ListObjectsV2
 - CreateMultipartUpload, UploadPart, CompleteMultipartUpload, AbortMultipartUpload
+- ListMultipartUploads, ListParts
 
 ### DynamoDB
 - CreateTable, DeleteTable, DescribeTable, ListTables
@@ -242,6 +292,8 @@ curl http://localhost:4566/_localstack/health
 - Invoke (RequestResponse, Event)
 - UpdateFunctionCode, UpdateFunctionConfiguration
 - Environment variables, Python runtime
+- Lambda Layers (local zip files)
+- Code deployment from S3
 
 ### CloudWatch Logs
 - CreateLogGroup, CreateLogStream, DeleteLogGroup

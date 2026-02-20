@@ -87,6 +87,8 @@ pub struct FunctionConfig {
     pub timeout: i32,
     pub environment: HashMap<String, String>,
     pub description: Option<String>,
+    /// Local paths to layer ZIP files (only used with Docker executor)
+    pub layers: Vec<String>,
 }
 
 impl Default for FunctionConfig {
@@ -94,6 +96,7 @@ impl Default for FunctionConfig {
         Self {
             function_name: String::new(),
             runtime: Runtime::Python312,
+            layers: Vec::new(),
             handler: "lambda_function.lambda_handler".to_string(),
             role: "arn:aws:iam::000000000000:role/lambda-role".to_string(),
             memory_size: 128,

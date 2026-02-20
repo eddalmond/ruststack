@@ -74,11 +74,15 @@ impl AppState {
         let storage: Arc<dyn ObjectStorage> = Arc::new(EphemeralStorage::new());
         let cloudwatch_logs = Arc::new(CloudWatchLogsState::new());
         Self {
-            s3: Arc::new(S3State { storage }),
+            s3: Arc::new(S3State { storage: storage.clone() }),
             dynamodb: Arc::new(DynamoDBState {
                 storage: Arc::new(DynamoDBStorage::new()),
             }),
-            lambda: Arc::new(LambdaState::new_with_config(lambda_executor, docker_config)),
+            lambda: Arc::new(LambdaState::new_with_config_and_s3(
+                lambda_executor,
+                docker_config,
+                storage,
+            )),
             cloudwatch_logs,
             secretsmanager: Arc::new(SecretsManagerState::new()),
             iam: Arc::new(IamState::new()),

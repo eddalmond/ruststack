@@ -92,7 +92,7 @@ pub struct ObjectSummary {
 }
 
 /// Information about a multipart upload part
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PartInfo {
     pub part_number: i32,
     pub etag: String,
@@ -111,6 +111,14 @@ pub struct CompletedPart {
 pub struct CompleteResult {
     pub etag: String,
     pub version_id: Option<String>,
+}
+
+/// Information about a multipart upload (for listing)
+#[derive(Debug, Clone)]
+pub struct MultipartUploadInfo {
+    pub key: String,
+    pub upload_id: String,
+    pub initiated: DateTime<Utc>,
 }
 
 /// Abstract storage backend trait
@@ -206,4 +214,18 @@ pub trait ObjectStorage: Send + Sync {
         key: &str,
         upload_id: &str,
     ) -> Result<(), StorageError>;
+
+    /// List multipart uploads in a bucket
+    async fn list_multipart_uploads(
+        &self,
+        bucket: &str,
+    ) -> Result<Vec<MultipartUploadInfo>, StorageError>;
+
+    /// List parts in a multipart upload
+    async fn list_parts(
+        &self,
+        bucket: &str,
+        key: &str,
+        upload_id: &str,
+    ) -> Result<Vec<PartInfo>, StorageError>;
 }

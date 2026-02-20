@@ -49,6 +49,75 @@ In `auto` mode, RustStack uses Docker when:
 - Function specifies a custom image
 - `--force-docker` is set in function tags
 
+## Lambda Layers
+
+When using Docker mode, you can specify Lambda layers to include additional dependencies:
+
+```python
+import boto3
+
+lambda_client = boto3.client("lambda", endpoint_url="http://localhost:4566", ...)
+
+lambda_client.create_function(
+    FunctionName='my-function',
+    Runtime='python3.12',
+    Handler='handler.main',
+    Role='arn:aws:iam::123456789012:role/lambda-role',
+    Code={
+        'ZipFile': open('function.zip', 'rb').read(),
+    },
+    Layers=['/path/to/numpy-layer.zip', '/path/to/shared-libs.zip']
+)
+```
+
+### How Layers Work
+
+1. Layer ZIP files are mounted into the container at `/tmp/layerN.zip`
+2. Each layer is extracted to `/opt/` inside the container
+3. Python automatically adds `/opt/python/lib/python3.X/site-packages/` to `PYTHONPATH`
+
+### Layer Structure
+
+For Python layers, structure your ZIP like:
+```
+layer.zip
+├── python/
+│   └── lib/
+│       └── python3.12/
+│           └── site-packages/
+│               ├── numpy/
+│               └── pandas/
+└── (other files go to /opt/)
+```
+
+### Differences from AWS Lambda
+
+- AWS extracts layers to `/opt/python/lib/python3.12/site-packages/`
+- RustStack extracts to `/opt/` - you may need to adjust PYTHONPATH in your handler
+
+## S3 Code Deployment
+
+You can deploy Lambda functions with code stored in S3 (useful for large functions):
+
+```python
+# Upload code to S3 first
+s3 = boto3.client("s3", endpoint_url="http://localhost:4566", ...)
+s3.put_object(Bucket='my-bucket', Key='function.zip', Body=open('function.zip', 'rb').read())
+
+# Create function from S3
+lambda_client.create_function(
+    FunctionName='my-function',
+    Runtime='python3.12',
+    Handler='handler.main',
+    Role='arn:aws:iam::123456789012:role/lambda-role',
+    Code={
+        'S3Bucket': 'my-bucket',
+        'S3Key': 'function.zip',
+        # Optional: 'S3ObjectVersion': 'version-id'
+    }
+)
+```
+
 ## Docker Images
 
 RustStack uses AWS Lambda-compatible base images:

@@ -7,6 +7,7 @@ description = "Lambda implementation for RustStack"
 
 [dependencies]
 ruststack-core = { path = "../ruststack-core" }
+ruststack-s3 = { path = "../ruststack-s3" }
 
 tokio.workspace = true
 axum.workspace = true

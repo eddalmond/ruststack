@@ -25,6 +25,7 @@ uuid.workspace = true
 dashmap.workspace = true
 
 md-5.workspace = true
+form_urlencoded.workspace = true
 sha1.workspace = true
 sha2.workspace = true
 crc32fast.workspace = true

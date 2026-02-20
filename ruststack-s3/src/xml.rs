@@ -156,6 +156,152 @@ pub fn format_object_result(etag: &str) -> String {
     )
 }
 
+/// Format CreateMultipartUpload response
+pub fn format_create_multipart_upload(bucket: &str, key: &str, upload_id: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<CreateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Bucket>{}</Bucket>
+  <Key>{}</Key>
+  <UploadId>{}</UploadId>
+</CreateMultipartUploadResult>"#,
+        xml_escape(bucket),
+        xml_escape(key),
+        upload_id
+    )
+}
+
+/// Format CompleteMultipartUpload response
+pub fn format_complete_multipart_upload(bucket: &str, key: &str, etag: &str, location: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Location>{}</Location>
+  <Bucket>{}</Bucket>
+  <Key>{}</Key>
+  <ETag>{}</ETag>
+</CompleteMultipartUploadResult>"#,
+        xml_escape(location),
+        xml_escape(bucket),
+        xml_escape(key),
+        etag
+    )
+}
+
+/// Format AbortMultipartUpload response
+pub fn format_abort_multipart_upload() -> String {
+    r#"<?xml version="1.0" encoding="UTF-8"?>
+<AbortMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+</AbortMultipartUploadResult>"#.to_string()
+}
+
+/// Info about a multipart upload (for listing)
+#[derive(Debug)]
+pub struct MultipartUploadInfo {
+    pub key: String,
+    pub upload_id: String,
+    pub initiated: chrono::DateTime<chrono::Utc>,
+}
+
+/// Info about a part (for listing)
+#[derive(Debug)]
+pub struct PartInfo {
+    pub part_number: i32,
+    pub etag: String,
+    pub size: u64,
+}
+
+/// Format ListMultipartUploads response
+pub fn format_list_multipart_uploads(
+    bucket: &str,
+    uploads: &[MultipartUploadInfo],
+) -> String {
+    let upload_entries: String = uploads
+        .iter()
+        .map(|u| {
+            format!(
+                r#"    <Upload>
+      <Key>{}</Key>
+      <UploadId>{}</UploadId>
+      <Initiator>
+        <ID>000000000000</ID>
+        <DisplayName>ruststack</DisplayName>
+      </Initiator>
+      <Owner>
+        <ID>000000000000</ID>
+        <DisplayName>ruststack</DisplayName>
+      </Owner>
+      <StorageClass>STANDARD</StorageClass>
+      <Initiated>{}</Initiated>
+    </Upload>"#,
+                xml_escape(&u.key),
+                u.upload_id,
+                u.initiated.format("%Y-%m-%dT%H:%M:%S.000Z")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<ListMultipartUploadsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Bucket>{}</Bucket>
+  <KeyMarker/>
+  <UploadIdMarker/>
+  {}
+</ListMultipartUploadsResult>"#,
+        bucket,
+        if upload_entries.is_empty() {
+            String::new()
+        } else {
+            format!("  <Uploads>\n{}  </Uploads>", upload_entries)
+        }
+    )
+}
+
+/// Format ListParts response
+pub fn format_list_parts(
+    bucket: &str,
+    key: &str,
+    upload_id: &str,
+    parts: &[PartInfo],
+) -> String {
+    let part_entries: String = parts
+        .iter()
+        .map(|p| {
+            format!(
+                r#"    <Part>
+      <PartNumber>{}</PartNumber>
+      <ETag>{}</ETag>
+      <Size>{}</Size>
+    </Part>"#,
+                p.part_number, p.etag, p.size
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<ListPartsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Bucket>{}</Bucket>
+  <Key>{}</Key>
+  <UploadId>{}</UploadId>
+  <StorageClass>STANDARD</StorageClass>
+  <IsTruncated>false</IsTruncated>
+{}
+</ListPartsResult>"#,
+        bucket,
+        xml_escape(key),
+        upload_id,
+        if part_entries.is_empty() {
+            String::new()
+        } else {
+            format!("  <Parts>\n{}  </Parts>", part_entries)
+        }
+    )
+}
+
 /// XML escape special characters
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")

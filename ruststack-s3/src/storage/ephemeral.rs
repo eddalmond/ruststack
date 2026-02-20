@@ -402,6 +402,57 @@ impl ObjectStorage for EphemeralStorage {
         bucket_ref.multipart_uploads.remove(upload_id);
         Ok(())
     }
+
+    async fn list_multipart_uploads(
+        &self,
+        bucket: &str,
+    ) -> Result<Vec<MultipartUploadInfo>, StorageError> {
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
+            .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
+
+        let uploads: Vec<MultipartUploadInfo> = bucket_ref
+            .multipart_uploads
+            .iter()
+            .map(|entry| MultipartUploadInfo {
+                key: entry.value().key.clone(),
+                upload_id: entry.key().clone(),
+                initiated: entry.value().created_at,
+            })
+            .collect();
+
+        Ok(uploads)
+    }
+
+    async fn list_parts(
+        &self,
+        bucket: &str,
+        _key: &str,
+        upload_id: &str,
+    ) -> Result<Vec<PartInfo>, StorageError> {
+        let bucket_ref = self
+            .buckets
+            .get(bucket)
+            .ok_or_else(|| StorageError::BucketNotFound(bucket.to_string()))?;
+
+        let upload = bucket_ref
+            .multipart_uploads
+            .get(upload_id)
+            .ok_or_else(|| StorageError::UploadNotFound(upload_id.to_string()))?;
+
+        let parts: Vec<PartInfo> = upload
+            .parts
+            .iter()
+            .map(|(num, part)| PartInfo {
+                part_number: *num,
+                etag: part.etag.clone(),
+                size: part.data.len() as u64,
+            })
+            .collect();
+
+        Ok(parts)
+    }
 }
 
 #[cfg(test)]

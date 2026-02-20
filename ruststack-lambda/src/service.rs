@@ -13,6 +13,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
+use ruststack_s3::storage::ObjectStorage;
 use thiserror::Error;
 use tokio::process::Command;
 use tokio::sync::OnceCell;
@@ -44,6 +45,9 @@ pub enum LambdaServiceError {
     #[error("Zip extraction error: {0}")]
     ZipError(String),
 
+    #[error("Internal error: {0}")]
+    Internal(String),
+
     #[error("Docker error: {0}")]
     Docker(#[from] crate::docker::DockerError),
 }
@@ -59,6 +63,8 @@ pub struct LambdaService {
     docker_executor: OnceCell<DockerExecutor>,
     /// Docker executor config
     docker_config: DockerExecutorConfig,
+    /// S3 storage for fetching function code
+    s3_storage: Option<Arc<dyn ObjectStorage>>,
 }
 
 impl Default for LambdaService {
@@ -85,7 +91,13 @@ impl LambdaService {
             executor_mode: mode,
             docker_executor: OnceCell::new(),
             docker_config,
+            s3_storage: None,
         }
+    }
+
+    /// Set S3 storage for fetching function code from S3
+    pub fn set_s3_storage(&mut self, storage: Arc<dyn ObjectStorage>) {
+        self.s3_storage = Some(storage);
     }
 
     /// Get the current execution mode
@@ -177,9 +189,22 @@ impl LambdaService {
 
                 (hash, size, Some(path))
             }
-            FunctionCode::S3 { .. } => {
-                // TODO: Fetch from S3 and calculate
-                ("placeholder".to_string(), 0, None)
+            FunctionCode::S3 { bucket, key, version } => {
+                // Fetch from S3
+                if let Some(ref s3) = self.s3_storage {
+                    let obj = s3.get_object(bucket, key, version.as_deref()).await
+                        .map_err(|e| LambdaServiceError::Internal(format!("Failed to fetch from S3: {}", e)))?;
+                    
+                    let mut hasher = Sha256::new();
+                    hasher.update(&obj.data);
+                    let hash = general_purpose::STANDARD.encode(hasher.finalize());
+                    let size = obj.data.len() as i64;
+                    
+                    let path = self.extract_code(&config.function_name, &obj.data)?;
+                    (hash, size, Some(path))
+                } else {
+                    return Err(LambdaServiceError::Internal("S3 storage not configured".to_string()));
+                }
             }
         };
 

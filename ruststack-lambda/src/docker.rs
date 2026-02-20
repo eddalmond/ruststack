@@ -281,6 +281,15 @@ impl DockerExecutor {
             "1".to_string(),
         ];
 
+        // Handle Lambda layers - mount and extract each layer to /opt/
+        let layers = &function.config.layers;
+        for (i, layer_path) in layers.iter().enumerate() {
+            let layer_name = format!("layer{}", i);
+            // Mount the layer zip file
+            args.push("-v".to_string());
+            args.push(format!("{}:/tmp/{}.zip:ro", layer_path, layer_name));
+        }
+
         args.extend(env_args);
         args.push(image.to_string());
         args.push(function.config.handler.clone());
@@ -307,6 +316,33 @@ impl DockerExecutor {
             image = %image,
             "Created new container"
         );
+
+        // Extract Lambda layers to /opt/
+        for (i, layer_path) in layers.iter().enumerate() {
+            let layer_name = format!("layer{}", i);
+            let extract_cmd = format!(
+                "unzip -q -o /tmp/{}.zip -d /opt/ && rm /tmp/{}.zip",
+                layer_name, layer_name
+            );
+            
+            let extract_output = Command::new("docker")
+                .args(["exec", &container_id, "sh", "-c", &extract_cmd])
+                .output()
+                .await;
+            
+            match extract_output {
+                Ok(output) if output.status.success() => {
+                    debug!(layer = %layer_path, "Extracted layer to /opt/");
+                }
+                Ok(output) => {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    warn!(layer = %layer_path, error = %stderr, "Failed to extract layer");
+                }
+                Err(e) => {
+                    warn!(layer = %layer_path, error = %e, "Failed to extract layer");
+                }
+            }
+        }
 
         // Add to warm pool
         {

@@ -41,6 +41,16 @@ impl LambdaState {
             service: LambdaService::with_mode_and_config(executor_mode, docker_config),
         }
     }
+
+    pub fn new_with_config_and_s3(
+        executor_mode: ExecutorMode,
+        docker_config: DockerExecutorConfig,
+        s3_storage: std::sync::Arc<dyn ruststack_s3::storage::ObjectStorage>,
+    ) -> Self {
+        let mut service = LambdaService::with_mode_and_config(executor_mode, docker_config);
+        service.set_s3_storage(s3_storage);
+        Self { service }
+    }
 }
 
 impl Default for LambdaState {
@@ -66,6 +76,9 @@ pub struct CreateFunctionRequest {
     pub memory_size: i32,
     #[serde(default)]
     pub environment: Option<EnvironmentRequest>,
+    /// Local paths to layer ZIP files (only used with Docker executor)
+    #[serde(default)]
+    pub layers: Option<Vec<String>>,
 }
 
 fn default_timeout() -> i32 {
@@ -330,6 +343,7 @@ pub async fn create_function(
         timeout: req.timeout,
         environment: req.environment.map(|e| e.variables).unwrap_or_default(),
         description: req.description,
+        layers: req.layers.unwrap_or_default(),
     };
 
     match state.service.create_function(config, code).await {
