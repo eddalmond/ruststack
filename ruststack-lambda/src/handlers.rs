@@ -160,6 +160,10 @@ pub struct FunctionResponse {
     pub code_sha256: String,
     pub version: String,
     pub state: String,
+    pub package_type: String,
+    pub architectures: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layers: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub environment: Option<EnvironmentResponse>,
 }
@@ -172,6 +176,12 @@ pub struct EnvironmentResponse {
 
 impl From<&Function> for FunctionResponse {
     fn from(f: &Function) -> Self {
+        let layers = if f.config.layers.is_empty() {
+            None
+        } else {
+            Some(f.config.layers.clone())
+        };
+
         Self {
             function_name: f.config.function_name.clone(),
             function_arn: f.arn.clone(),
@@ -186,6 +196,9 @@ impl From<&Function> for FunctionResponse {
             code_sha256: f.code_sha256.clone(),
             version: f.version.clone(),
             state: format!("{:?}", f.state),
+            package_type: "Zip".to_string(),
+            architectures: vec!["x86_64".to_string()],
+            layers,
             environment: if f.config.environment.is_empty() {
                 None
             } else {
