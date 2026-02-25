@@ -250,7 +250,7 @@ mod tests {
     fn test_create_user_pool() {
         let state = test_state();
         let pool = state.create_user_pool("test-pool", "us-east-1");
-        
+
         assert_eq!(pool.name, "test-pool");
         assert_eq!(pool.region, "us-east-1");
         assert!(!pool.id.is_empty());
@@ -263,7 +263,7 @@ mod tests {
     fn test_create_user_pool_sets_timestamps() {
         let state = test_state();
         let pool = state.create_user_pool("timestamp-test", "eu-west-1");
-        
+
         assert!(pool.created_at.timestamp() > 0);
     }
 
@@ -271,9 +271,9 @@ mod tests {
     fn test_get_user_pool() {
         let state = test_state();
         let created = state.create_user_pool("get-test", "us-west-2");
-        
+
         let result = state.get_user_pool(&created.id);
-        
+
         assert!(result.is_ok());
         assert_eq!(result.unwrap().name, "get-test");
     }
@@ -282,7 +282,7 @@ mod tests {
     fn test_get_nonexistent_pool_fails() {
         let state = test_state();
         let result = state.get_user_pool("us-east-1_nonexistent");
-        
+
         assert!(result.is_err());
         matches!(result.unwrap_err(), CognitoError::UserPoolNotFound(_));
     }
@@ -292,9 +292,9 @@ mod tests {
         let state = test_state();
         state.create_user_pool("pool-1", "us-east-1");
         state.create_user_pool("pool-2", "eu-west-1");
-        
+
         let pools = state.list_user_pools();
-        
+
         assert_eq!(pools.len(), 2);
     }
 
@@ -302,7 +302,7 @@ mod tests {
     fn test_list_user_pools_empty() {
         let state = test_state();
         let pools = state.list_user_pools();
-        
+
         assert!(pools.is_empty());
     }
 
@@ -311,7 +311,7 @@ mod tests {
         let state = test_state();
         let pool1 = state.create_user_pool("unique-test", "us-east-1");
         let pool2 = state.create_user_pool("unique-test", "us-east-1");
-        
+
         // Different UUID suffix means different IDs
         assert_ne!(pool1.id, pool2.id);
     }
@@ -322,14 +322,9 @@ mod tests {
     fn test_create_user() {
         let state = test_state();
         let pool = state.create_user_pool("user-pool", "us-east-1");
-        
-        let user = state.create_user(
-            &pool.id,
-            "testuser",
-            "password123",
-            "test@example.com",
-        );
-        
+
+        let user = state.create_user(&pool.id, "testuser", "password123", "test@example.com");
+
         assert!(user.is_ok());
         let user = user.unwrap();
         assert_eq!(user.username, "testuser");
@@ -342,9 +337,11 @@ mod tests {
     fn test_create_user_default_status() {
         let state = test_state();
         let pool = state.create_user_pool("status-test", "us-east-1");
-        
-        let user = state.create_user(&pool.id, "user1", "pass", "user1@test.com").unwrap();
-        
+
+        let user = state
+            .create_user(&pool.id, "user1", "pass", "user1@test.com")
+            .unwrap();
+
         assert_eq!(user.status, UserStatus::Confirmed);
     }
 
@@ -352,20 +349,30 @@ mod tests {
     fn test_create_user_adds_email_attribute() {
         let state = test_state();
         let pool = state.create_user_pool("attr-test", "us-east-1");
-        
-        let user = state.create_user(&pool.id, "user1", "pass", "user1@test.com").unwrap();
-        
-        assert_eq!(user.attributes.get("email"), Some(&"user1@test.com".to_string()));
-        assert_eq!(user.attributes.get("email_verified"), Some(&"true".to_string()));
+
+        let user = state
+            .create_user(&pool.id, "user1", "pass", "user1@test.com")
+            .unwrap();
+
+        assert_eq!(
+            user.attributes.get("email"),
+            Some(&"user1@test.com".to_string())
+        );
+        assert_eq!(
+            user.attributes.get("email_verified"),
+            Some(&"true".to_string())
+        );
     }
 
     #[test]
     fn test_create_user_sets_timestamps() {
         let state = test_state();
         let pool = state.create_user_pool("time-test", "us-east-1");
-        
-        let user = state.create_user(&pool.id, "user1", "pass", "user1@test.com").unwrap();
-        
+
+        let user = state
+            .create_user(&pool.id, "user1", "pass", "user1@test.com")
+            .unwrap();
+
         assert!(user.created_at.timestamp() > 0);
         assert!(user.last_modified.timestamp() > 0);
     }
@@ -374,11 +381,13 @@ mod tests {
     fn test_create_duplicate_user_fails() {
         let state = test_state();
         let pool = state.create_user_pool("dup-test", "us-east-1");
-        
-        state.create_user(&pool.id, "duplicate", "pass", "dup@test.com").unwrap();
-        
+
+        state
+            .create_user(&pool.id, "duplicate", "pass", "dup@test.com")
+            .unwrap();
+
         let result = state.create_user(&pool.id, "duplicate", "pass", "dup@test.com");
-        
+
         assert!(result.is_err());
         matches!(result.unwrap_err(), CognitoError::UserAlreadyExists(_));
     }
@@ -387,10 +396,12 @@ mod tests {
     fn test_get_user() {
         let state = test_state();
         let pool = state.create_user_pool("get-user-test", "us-east-1");
-        state.create_user(&pool.id, "getuser", "password", "getuser@test.com").unwrap();
-        
+        state
+            .create_user(&pool.id, "getuser", "password", "getuser@test.com")
+            .unwrap();
+
         let user = state.get_user(&pool.id, "getuser");
-        
+
         assert!(user.is_ok());
         assert_eq!(user.unwrap().username, "getuser");
     }
@@ -399,9 +410,9 @@ mod tests {
     fn test_get_nonexistent_user_fails() {
         let state = test_state();
         let pool = state.create_user_pool("nonexist-test", "us-east-1");
-        
+
         let result = state.get_user(&pool.id, "nonexistent");
-        
+
         assert!(result.is_err());
         matches!(result.unwrap_err(), CognitoError::UserNotFound(_));
     }
@@ -410,12 +421,14 @@ mod tests {
     fn test_delete_user() {
         let state = test_state();
         let pool = state.create_user_pool("delete-test", "us-east-1");
-        state.create_user(&pool.id, "todelete", "pass", "delete@test.com").unwrap();
-        
+        state
+            .create_user(&pool.id, "todelete", "pass", "delete@test.com")
+            .unwrap();
+
         let result = state.delete_user(&pool.id, "todelete");
-        
+
         assert!(result.is_ok());
-        
+
         // Verify user is gone
         let result = state.get_user(&pool.id, "todelete");
         assert!(result.is_err());
@@ -425,9 +438,9 @@ mod tests {
     fn test_delete_nonexistent_user_fails() {
         let state = test_state();
         let pool = state.create_user_pool("del-none-test", "us-east-1");
-        
+
         let result = state.delete_user(&pool.id, "nonexistent");
-        
+
         assert!(result.is_err());
         matches!(result.unwrap_err(), CognitoError::UserNotFound(_));
     }
@@ -438,14 +451,16 @@ mod tests {
     fn test_enable_user() {
         let state = test_state();
         let pool = state.create_user_pool("enable-test", "us-east-1");
-        state.create_user(&pool.id, "user1", "pass", "user1@test.com").unwrap();
-        
+        state
+            .create_user(&pool.id, "user1", "pass", "user1@test.com")
+            .unwrap();
+
         // First disable
         state.disable_user(&pool.id, "user1").unwrap();
-        
+
         // Then enable
         let user = state.enable_user(&pool.id, "user1").unwrap();
-        
+
         assert!(user.enabled);
     }
 
@@ -453,10 +468,12 @@ mod tests {
     fn test_disable_user() {
         let state = test_state();
         let pool = state.create_user_pool("disable-test", "us-east-1");
-        state.create_user(&pool.id, "user1", "pass", "user1@test.com").unwrap();
-        
+        state
+            .create_user(&pool.id, "user1", "pass", "user1@test.com")
+            .unwrap();
+
         let user = state.disable_user(&pool.id, "user1").unwrap();
-        
+
         assert!(!user.enabled);
     }
 
@@ -466,10 +483,12 @@ mod tests {
     fn test_authenticate_success() {
         let state = test_state();
         let pool = state.create_user_pool("auth-test", "us-east-1");
-        state.create_user(&pool.id, "authuser", "correctpassword", "auth@test.com").unwrap();
-        
+        state
+            .create_user(&pool.id, "authuser", "correctpassword", "auth@test.com")
+            .unwrap();
+
         let result = state.authenticate(&pool.id, "authuser", "correctpassword");
-        
+
         assert!(result.is_ok());
         let auth = result.unwrap();
         assert!(!auth.id_token.is_empty());
@@ -482,10 +501,12 @@ mod tests {
     fn test_authenticate_wrong_password_fails() {
         let state = test_state();
         let pool = state.create_user_pool("auth-fail-test", "us-east-1");
-        state.create_user(&pool.id, "user1", "correctpassword", "user1@test.com").unwrap();
-        
+        state
+            .create_user(&pool.id, "user1", "correctpassword", "user1@test.com")
+            .unwrap();
+
         let result = state.authenticate(&pool.id, "user1", "wrongpassword");
-        
+
         assert!(result.is_err());
         matches!(result.unwrap_err(), CognitoError::InvalidCredentials);
     }
@@ -494,9 +515,9 @@ mod tests {
     fn test_authenticate_nonexistent_user_fails() {
         let state = test_state();
         let pool = state.create_user_pool("auth-none-test", "us-east-1");
-        
+
         let result = state.authenticate(&pool.id, "nonexistent", "password");
-        
+
         assert!(result.is_err());
         matches!(result.unwrap_err(), CognitoError::InvalidCredentials);
     }
@@ -505,11 +526,13 @@ mod tests {
     fn test_authenticate_disabled_user_fails() {
         let state = test_state();
         let pool = state.create_user_pool("auth-disable-test", "us-east-1");
-        state.create_user(&pool.id, "disableduser", "password", "disabled@test.com").unwrap();
+        state
+            .create_user(&pool.id, "disableduser", "password", "disabled@test.com")
+            .unwrap();
         state.disable_user(&pool.id, "disableduser").unwrap();
-        
+
         let result = state.authenticate(&pool.id, "disableduser", "password");
-        
+
         assert!(result.is_err());
         matches!(result.unwrap_err(), CognitoError::InvalidCredentials);
     }
@@ -518,14 +541,16 @@ mod tests {
     fn test_authenticate_returns_tokens() {
         let state = test_state();
         let pool = state.create_user_pool("token-test", "us-east-1");
-        state.create_user(&pool.id, "user1", "pass", "user1@test.com").unwrap();
-        
+        state
+            .create_user(&pool.id, "user1", "pass", "user1@test.com")
+            .unwrap();
+
         let auth = state.authenticate(&pool.id, "user1", "pass").unwrap();
-        
+
         // Basic JWT structure check (should have 3 parts separated by dots)
         let id_parts: Vec<&str> = auth.id_token.split('.').collect();
         assert_eq!(id_parts.len(), 3);
-        
+
         let access_parts: Vec<&str> = auth.access_token.split('.').collect();
         assert_eq!(access_parts.len(), 3);
     }

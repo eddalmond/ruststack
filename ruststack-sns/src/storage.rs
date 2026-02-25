@@ -373,7 +373,7 @@ mod tests {
     fn test_create_topic() {
         let state = test_state();
         let result = state.create_topic("test-topic");
-        
+
         assert!(result.is_ok());
         let topic = result.unwrap();
         assert_eq!(topic.name, "test-topic");
@@ -385,7 +385,7 @@ mod tests {
     fn test_create_topic_sets_timestamps() {
         let state = test_state();
         let topic = state.create_topic("timestamp-test").unwrap();
-        
+
         assert!(topic.created_timestamp > 0);
     }
 
@@ -393,7 +393,7 @@ mod tests {
     fn test_create_duplicate_topic_fails() {
         let state = test_state();
         state.create_topic("duplicate-test").unwrap();
-        
+
         let result = state.create_topic("duplicate-test");
         assert!(result.is_err());
         matches!(result.unwrap_err(), SnsError::TopicAlreadyExists(_));
@@ -403,10 +403,10 @@ mod tests {
     fn test_delete_topic() {
         let state = test_state();
         state.create_topic("to-delete").unwrap();
-        
+
         let result = state.delete_topic("to-delete");
         assert!(result.is_ok());
-        
+
         // Verify topic is gone
         let result = state.get_topic("to-delete");
         assert!(result.is_err());
@@ -425,7 +425,7 @@ mod tests {
     fn test_get_topic() {
         let state = test_state();
         state.create_topic("get-test").unwrap();
-        
+
         let result = state.get_topic("get-test");
         assert!(result.is_ok());
         assert_eq!(result.unwrap().name, "get-test");
@@ -444,7 +444,7 @@ mod tests {
         let state = test_state();
         state.create_topic("topic-1").unwrap();
         state.create_topic("topic-2").unwrap();
-        
+
         let topics = state.list_topics();
         assert_eq!(topics.len(), 2);
     }
@@ -462,9 +462,9 @@ mod tests {
     fn test_subscribe_sqs() {
         let state = test_state();
         state.create_topic("sqs-topic").unwrap();
-        
+
         let result = state.subscribe("sqs-topic", "sqs", "http://localhost:4566/my-queue");
-        
+
         assert!(result.is_ok());
         let sub = result.unwrap();
         matches!(sub, Subscription::Sqs { .. });
@@ -474,9 +474,13 @@ mod tests {
     fn test_subscribe_lambda() {
         let state = test_state();
         state.create_topic("lambda-topic").unwrap();
-        
-        let result = state.subscribe("lambda-topic", "lambda", "arn:aws:lambda:us-east-1:000000000000:function:my-function");
-        
+
+        let result = state.subscribe(
+            "lambda-topic",
+            "lambda",
+            "arn:aws:lambda:us-east-1:000000000000:function:my-function",
+        );
+
         assert!(result.is_ok());
         let sub = result.unwrap();
         matches!(sub, Subscription::Lambda { .. });
@@ -486,9 +490,9 @@ mod tests {
     fn test_subscribe_http() {
         let state = test_state();
         state.create_topic("http-topic").unwrap();
-        
+
         let result = state.subscribe("http-topic", "http", "https://example.com/webhook");
-        
+
         assert!(result.is_ok());
         let sub = result.unwrap();
         matches!(sub, Subscription::Http { .. });
@@ -498,9 +502,9 @@ mod tests {
     fn test_subscribe_https() {
         let state = test_state();
         state.create_topic("https-topic").unwrap();
-        
+
         let result = state.subscribe("https-topic", "https", "https://secure.example.com/hook");
-        
+
         assert!(result.is_ok());
         let sub = result.unwrap();
         matches!(sub, Subscription::Https { .. });
@@ -510,9 +514,9 @@ mod tests {
     fn test_subscribe_email() {
         let state = test_state();
         state.create_topic("email-topic").unwrap();
-        
+
         let result = state.subscribe("email-topic", "email", "test@example.com");
-        
+
         assert!(result.is_ok());
         let sub = result.unwrap();
         matches!(sub, Subscription::Email { .. });
@@ -530,19 +534,30 @@ mod tests {
     fn test_subscription_has_endpoint() {
         let state = test_state();
         state.create_topic("endpoint-test").unwrap();
-        
-        let sub = state.subscribe("endpoint-test", "lambda", "arn:aws:lambda:us-east-1:123456789012:function:Test").unwrap();
-        
-        assert_eq!(sub.endpoint(), "arn:aws:lambda:us-east-1:123456789012:function:Test");
+
+        let sub = state
+            .subscribe(
+                "endpoint-test",
+                "lambda",
+                "arn:aws:lambda:us-east-1:123456789012:function:Test",
+            )
+            .unwrap();
+
+        assert_eq!(
+            sub.endpoint(),
+            "arn:aws:lambda:us-east-1:123456789012:function:Test"
+        );
     }
 
     #[test]
     fn test_subscription_has_arn() {
         let state = test_state();
         state.create_topic("arn-test").unwrap();
-        
-        let sub = state.subscribe("arn-test", "sqs", "http://localhost:4566/my-queue").unwrap();
-        
+
+        let sub = state
+            .subscribe("arn-test", "sqs", "http://localhost:4566/my-queue")
+            .unwrap();
+
         assert!(!sub.arn().is_empty());
         assert!(sub.arn().contains("arn:aws:sns"));
     }
@@ -551,9 +566,17 @@ mod tests {
     fn test_list_subscriptions() {
         let state = test_state();
         state.create_topic("list-test").unwrap();
-        state.subscribe("list-test", "sqs", "http://localhost:4566/queue1").unwrap();
-        state.subscribe("list-test", "lambda", "arn:aws:lambda:us-east-1:000000000000:function:fn").unwrap();
-        
+        state
+            .subscribe("list-test", "sqs", "http://localhost:4566/queue1")
+            .unwrap();
+        state
+            .subscribe(
+                "list-test",
+                "lambda",
+                "arn:aws:lambda:us-east-1:000000000000:function:fn",
+            )
+            .unwrap();
+
         let subs = state.list_subscriptions("list-test").unwrap();
         assert_eq!(subs.len(), 2);
     }
@@ -563,9 +586,17 @@ mod tests {
         let state = test_state();
         state.create_topic("all-test-1").unwrap();
         state.create_topic("all-test-2").unwrap();
-        state.subscribe("all-test-1", "sqs", "http://localhost:4566/q1").unwrap();
-        state.subscribe("all-test-2", "lambda", "arn:aws:lambda:us-east-1:000000000000:function:fn").unwrap();
-        
+        state
+            .subscribe("all-test-1", "sqs", "http://localhost:4566/q1")
+            .unwrap();
+        state
+            .subscribe(
+                "all-test-2",
+                "lambda",
+                "arn:aws:lambda:us-east-1:000000000000:function:fn",
+            )
+            .unwrap();
+
         let all = state.list_all_subscriptions();
         assert_eq!(all.len(), 2);
     }
@@ -574,13 +605,15 @@ mod tests {
     fn test_unsubscribe() {
         let state = test_state();
         state.create_topic("unsub-test").unwrap();
-        
-        let sub = state.subscribe("unsub-test", "sqs", "http://localhost:4566/queue").unwrap();
+
+        let sub = state
+            .subscribe("unsub-test", "sqs", "http://localhost:4566/queue")
+            .unwrap();
         let arn = sub.arn().to_string();
-        
+
         let result = state.unsubscribe(&arn);
         assert!(result.is_ok());
-        
+
         let subs = state.list_subscriptions("unsub-test").unwrap();
         assert!(subs.is_empty());
     }
@@ -589,7 +622,7 @@ mod tests {
     fn test_unsubscribe_invalid_arn_fails() {
         let state = test_state();
         state.create_topic("unsub-invalid-test").unwrap();
-        
+
         let result = state.unsubscribe("arn:aws:sns:us-east-1:000000000000:invalid:12345678");
         assert!(result.is_err());
         matches!(result.unwrap_err(), SnsError::SubscriptionNotFound(_));
@@ -601,9 +634,9 @@ mod tests {
     fn test_publish() {
         let state = test_state();
         state.create_topic("publish-test").unwrap();
-        
+
         let result = state.publish("publish-test", "test message", None);
-        
+
         assert!(result.is_ok());
         let message_id = result.unwrap();
         assert!(!message_id.is_empty());
@@ -613,9 +646,9 @@ mod tests {
     fn test_publish_with_subject() {
         let state = test_state();
         state.create_topic("subject-test").unwrap();
-        
+
         let result = state.publish("subject-test", "message body", Some("Test Subject"));
-        
+
         assert!(result.is_ok());
     }
 
@@ -631,9 +664,9 @@ mod tests {
     fn test_publish_returns_message_id() {
         let state = test_state();
         state.create_topic("msgid-test").unwrap();
-        
+
         let msg_id = state.publish("msgid-test", "test", None).unwrap();
-        
+
         // Should be a valid UUID
         assert!(uuid::Uuid::parse_str(&msg_id).is_ok());
     }
@@ -642,9 +675,11 @@ mod tests {
     fn test_topic_arn_format() {
         let state = test_state();
         state.create_topic("arn-format-test").unwrap();
-        
+
         let topic = state.get_topic("arn-format-test").unwrap();
-        
-        assert!(topic.arn.starts_with("arn:aws:sns:us-east-1:000000000000:arn-format-test"));
+
+        assert!(topic
+            .arn
+            .starts_with("arn:aws:sns:us-east-1:000000000000:arn-format-test"));
     }
 }
