@@ -1,0 +1,22 @@
+[package]
+name = "ruststack-cognito"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cognito implementation for RustStack"
+
+[dependencies]
+axum.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+dashmap.workspace = true
+http.workspace = true
+jsonwebtoken.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[lib]

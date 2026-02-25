@@ -14,6 +14,7 @@ ruststack-lambda = { path = "../ruststack-lambda" }
 ruststack-secretsmanager = { path = "../ruststack-secretsmanager" }
 ruststack-iam = { path = "../ruststack-iam" }
 ruststack-apigateway = { path = "../ruststack-apigateway" }
+ruststack-cognito = { path = "../ruststack-cognito" }
 ruststack-firehose = { path = "../ruststack-firehose" }
 ruststack-sqs = { path = "../ruststack-sqs" }
 ruststack-sns = { path = "../ruststack-sns" }

@@ -10,11 +10,14 @@ use axum::{
     Json, Router,
 };
 use bytes::Bytes;
+use http::Request;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{debug, info};
 
 use ruststack_apigateway::{handlers as apigateway_handlers, ApiGatewayState};
+use ruststack_auth::middleware::validate_sigv4;
+use ruststack_cognito::{handlers as cognito_handlers, CognitoState};
 use ruststack_dynamodb::{handlers as dynamodb_handlers, DynamoDBState, DynamoDBStorage};
 use ruststack_firehose::{handlers as firehose_handlers, FirehoseState};
 use ruststack_iam::{handlers as iam_handlers, IamState};
@@ -27,13 +30,14 @@ use ruststack_lambda::{
 };
 use ruststack_s3::{
     handlers::{self, ListObjectsQuery, S3State},
-    storage::{EphemeralStorage, ObjectStorage},
+    storage::{EphemeralStorage, ObjectStorage, PersistentStorage},
 };
 use ruststack_secretsmanager::{handlers as secrets_handlers, SecretsManagerState};
 use ruststack_sns::{handlers as sns_handlers, SnsState};
 use ruststack_sqs::{handlers as sqs_handlers, SqsState};
 
 use crate::cloudwatch::{self, CloudWatchLogsState};
+use crate::config::EnvConfig;
 
 /// Service state for the main router
 pub struct AppState {
@@ -42,6 +46,7 @@ pub struct AppState {
     lambda: Arc<LambdaState>,
     cloudwatch_logs: Arc<CloudWatchLogsState>,
     secretsmanager: Arc<SecretsManagerState>,
+    cognito: Arc<CognitoState>,
     iam: Arc<IamState>,
     apigateway: Arc<ApiGatewayState>,
     firehose: Arc<FirehoseState>,
@@ -71,8 +76,61 @@ impl AppState {
         lambda_executor: ruststack_lambda::ExecutorMode,
         docker_config: ruststack_lambda::DockerExecutorConfig,
     ) -> Self {
-        let storage: Arc<dyn ObjectStorage> = Arc::new(EphemeralStorage::new());
+        Self::new_with_config(
+            s3_enabled,
+            dynamodb_enabled,
+            lambda_enabled,
+            lambda_executor,
+            docker_config,
+            false,
+            None,
+        )
+    }
+
+    pub fn new_with_config(
+        s3_enabled: bool,
+        dynamodb_enabled: bool,
+        lambda_enabled: bool,
+        lambda_executor: ruststack_lambda::ExecutorMode,
+        docker_config: ruststack_lambda::DockerExecutorConfig,
+        persistence_enabled: bool,
+        data_dir: Option<&std::path::Path>,
+    ) -> Self {
+        let storage: Arc<dyn ObjectStorage> = if persistence_enabled {
+            if let Some(dir) = data_dir {
+                match PersistentStorage::new(&dir.join("s3")) {
+                    Ok(s) => {
+                        tracing::info!("S3 persistence enabled at {:?}", dir.join("s3"));
+                        Arc::new(s)
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to initialize S3 persistence: {}, using ephemeral",
+                            e
+                        );
+                        Arc::new(EphemeralStorage::new())
+                    }
+                }
+            } else {
+                Arc::new(EphemeralStorage::new())
+            }
+        } else {
+            Arc::new(EphemeralStorage::new())
+        };
+
         let cloudwatch_logs = Arc::new(CloudWatchLogsState::new());
+
+        // Create SQS state first so SNS can reference it
+        let sqs_state = Arc::new(ruststack_sqs::SqsState::new());
+
+        // Create SNS state with SQS fanout
+        let mut sns_state = ruststack_sns::SnsState::new();
+        let sqs_for_callback = sqs_state.clone();
+        sns_state.set_sqs_fanout(move |queue_name, message| {
+            let _ = sqs_for_callback.send_message(queue_name, message.to_string());
+        });
+        let sns_state = Arc::new(sns_state);
+
         Self {
             s3: Arc::new(S3State {
                 storage: storage.clone(),
@@ -86,12 +144,30 @@ impl AppState {
                 storage,
             )),
             cloudwatch_logs,
-            secretsmanager: Arc::new(SecretsManagerState::new()),
+            secretsmanager: if persistence_enabled {
+                if let Some(dir) = data_dir {
+                    match SecretsManagerState::with_persistence(dir) {
+                        Some(state) => {
+                            tracing::info!(
+                                "Secrets Manager persistence enabled at {:?}",
+                                dir.join("secretsmanager")
+                            );
+                            Arc::new(state)
+                        }
+                        None => Arc::new(SecretsManagerState::new()),
+                    }
+                } else {
+                    Arc::new(SecretsManagerState::new())
+                }
+            } else {
+                Arc::new(SecretsManagerState::new())
+            },
+            cognito: Arc::new(CognitoState::new()),
             iam: Arc::new(IamState::new()),
             apigateway: Arc::new(ApiGatewayState::new()),
             firehose: Arc::new(FirehoseState::new()),
-            sqs: Arc::new(ruststack_sqs::SqsState::new()),
-            sns: Arc::new(ruststack_sns::SnsState::new()),
+            sqs: sqs_state,
+            sns: sns_state,
             s3_enabled,
             dynamodb_enabled,
             lambda_enabled,
@@ -99,8 +175,77 @@ impl AppState {
     }
 }
 
+/// AWS Protocol types based on Content-Type header
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AwsProtocol {
+    RestJson,
+    Query,
+    Json,
+    Unknown,
+}
+
+impl AwsProtocol {
+    pub fn from_content_type(ct: &str) -> Self {
+        if ct.contains("application/x-amz-json-1.1") {
+            AwsProtocol::RestJson
+        } else if ct.contains("application/x-www-form-urlencoded") {
+            AwsProtocol::Query
+        } else if ct.contains("application/x-amz-json-1.0") {
+            AwsProtocol::Json
+        } else {
+            AwsProtocol::Unknown
+        }
+    }
+}
+
+/// Middleware to extract and log AWS protocol information
+async fn extract_aws_protocol(request: Request<Body>, next: Next) -> Response {
+    let content_type = request
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let protocol = AwsProtocol::from_content_type(content_type);
+
+    if protocol != AwsProtocol::Unknown {
+        debug!(protocol = ?protocol, content_type = %content_type, "AWS protocol detected");
+    }
+
+    next.run(request).await
+}
+
+/// Middleware to handle S3 virtual-hosted style routing
+/// Detects bucket name from Host header (e.g., bucket.localhost:4566)
+async fn extract_s3_bucket(request: Request<Body>, next: Next) -> Response {
+    let _uri = request.uri();
+    let headers = request.headers();
+
+    // Check Host header for virtual-hosted style
+    if let Some(host) = headers.get("host") {
+        if let Ok(host_str) = host.to_str() {
+            // Remove port if present
+            let host_only = host_str.split(':').next().unwrap_or(host_str);
+
+            // Check if this looks like virtual-hosted style (contains dots or is different from server host)
+            // Common patterns: bucket.localhost, bucket.s3.localstack.cloud, etc.
+            if host_only.contains('.') || host_only != "localhost" && host_only != "127.0.0.1" {
+                // This might be virtual-hosted style - the bucket is the first part
+                if let Some(first_part) = host_only.split('.').next() {
+                    if !first_part.is_empty() && !first_part.eq_ignore_ascii_case("localhost") {
+                        debug!(bucket = %first_part, "S3 virtual-hosted style detected");
+                        // We could inject the bucket here, but Axum routing handles it differently
+                    }
+                }
+            }
+        }
+    }
+
+    next.run(request).await
+}
+
 /// Middleware to add x-amzn-requestid header to all responses
-async fn add_request_id(request: axum::http::Request<Body>, next: Next) -> Response {
+async fn add_request_id(request: Request<Body>, next: Next) -> Response {
     let mut response = next.run(request).await;
     let request_id = uuid::Uuid::new_v4().to_string();
     response
@@ -110,7 +255,7 @@ async fn add_request_id(request: axum::http::Request<Body>, next: Next) -> Respo
 }
 
 /// Create the main application router
-pub fn create_router(state: AppState) -> Router {
+pub fn create_router(state: AppState, _env_config: EnvConfig) -> Router {
     let shared_state = Arc::new(state);
 
     // Lambda routes - must be registered before S3 catch-all routes
@@ -196,6 +341,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/", any(handle_root))
         .route("/:bucket", any(handle_bucket))
         .route("/:bucket/*key", any(handle_object))
+        // Middleware layers
+        .layer(middleware::from_fn(extract_aws_protocol))
+        .layer(middleware::from_fn(extract_s3_bucket))
+        .layer(middleware::from_fn(validate_sigv4))
         .layer(middleware::from_fn(add_request_id))
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state)
@@ -361,6 +510,15 @@ async fn handle_root(
             // SNS
             if target_str.starts_with("AmazonSNS") {
                 return sns_handlers::handle_request(State(state.sns.clone()), headers, body).await;
+            }
+            // Cognito
+            if target_str.starts_with("AWSCognitoIdentityProvider") {
+                return cognito_handlers::handle_request(
+                    State(state.cognito.clone()),
+                    headers,
+                    body,
+                )
+                .await;
             }
             // Kinesis Firehose
             if target_str.starts_with("Firehose_") {
