@@ -239,6 +239,7 @@ impl SnsStorage {
 use std::sync::Arc;
 
 #[derive(Default)]
+#[allow(clippy::type_complexity)]
 pub struct SnsState {
     storage: SnsStorage,
     sqs_fanout: Option<Arc<dyn Fn(&str, &str) + Send + Sync>>,

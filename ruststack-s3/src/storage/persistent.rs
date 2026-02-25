@@ -459,7 +459,7 @@ impl ObjectStorage for PersistentStorage {
         // Compute multipart ETag
         let etag = format!(
             "\"{}-{}\"",
-            Uuid::new_v4().to_string().replace("-", "")[..32].to_string(),
+            &Uuid::new_v4().to_string().replace("-", "")[..32],
             parts.len()
         );
 

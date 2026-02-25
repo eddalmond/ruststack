@@ -38,7 +38,7 @@ impl UserPool {
         let id = format!(
             "{}_{}",
             region,
-            Uuid::new_v4().to_string().replace("-", "")[..8].to_string()
+            &Uuid::new_v4().to_string().replace("-", "")[..8]
         );
         let client_id = Uuid::new_v4().to_string().replace("-", "");
         let secret_key = Uuid::new_v4().to_string();
@@ -69,22 +69,17 @@ pub struct CognitoUser {
     pub last_modified: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum UserStatus {
-    UNCONFIRMED,
-    CONFIRMED,
-    ARCHIVED,
-    COMPROMISED,
-    UNKNOWN,
+    #[default]
+    Unconfirmed,
+    Confirmed,
+    Archived,
+    Compromised,
+    Unknown,
     #[serde(rename = "RESET_REQUIRED")]
     ResetRequired,
-}
-
-impl Default for UserStatus {
-    fn default() -> Self {
-        UserStatus::CONFIRMED
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -143,7 +138,7 @@ impl CognitoState {
             email: email.to_string(),
             email_verified: true,
             enabled: true,
-            status: UserStatus::CONFIRMED,
+            status: UserStatus::Confirmed,
             attributes: HashMap::from([
                 ("email".to_string(), email.to_string()),
                 ("email_verified".to_string(), "true".to_string()),
