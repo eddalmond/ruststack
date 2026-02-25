@@ -234,46 +234,28 @@ impl SnsStorage {
         }
         result
     }
-
-    pub fn publish(
-        &self,
-        topic_name: &str,
-        _message: &str,
-        _subject: Option<&str>,
-    ) -> Result<String, SnsError> {
-        let topic = self.get_topic(topic_name)?;
-
-        let message_id = uuid::Uuid::new_v4().to_string();
-
-        // Get subscriptions for this topic
-        let subscriptions = self
-            .subscriptions
-            .get(topic_name)
-            .map(|s| s.clone())
-            .unwrap_or_default();
-
-        // In a real implementation, would actually deliver to endpoints
-        // For now, just log and return success
-        for sub in &subscriptions {
-            info!(topic = %topic_name, protocol = %sub.endpoint(), endpoint = %sub.endpoint(),
-                message_id = %message_id, "Would publish to subscriber");
-        }
-
-        info!(topic = %topic_name, arn = %topic.arn, message_id = %message_id,
-            subscriber_count = subscriptions.len(), "Published message");
-
-        Ok(message_id)
-    }
 }
 
-#[derive(Debug, Default)]
+use std::sync::Arc;
+
+#[derive(Default)]
 pub struct SnsState {
     storage: SnsStorage,
+    sqs_fanout: Option<Arc<dyn Fn(&str, &str) + Send + Sync>>,
 }
 
 impl SnsState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set a fan-out callback for SQS
+    /// The callback receives (queue_name, message_body)
+    pub fn set_sqs_fanout<F>(&mut self, callback: F)
+    where
+        F: Fn(&str, &str) + Send + Sync + 'static,
+    {
+        self.sqs_fanout = Some(Arc::new(callback));
     }
 
     pub fn create_topic(&self, name: &str) -> Result<Topic, SnsError> {
@@ -316,9 +298,62 @@ impl SnsState {
     pub fn publish(
         &self,
         topic_name: &str,
-        _message: &str,
-        _subject: Option<&str>,
+        message: &str,
+        subject: Option<&str>,
     ) -> Result<String, SnsError> {
-        self.storage.publish(topic_name, _message, _subject)
+        let topic = self.storage.get_topic(topic_name)?;
+
+        let message_id = uuid::Uuid::new_v4().to_string();
+
+        // Get subscriptions
+        let subscriptions = self
+            .storage
+            .subscriptions
+            .get(topic_name)
+            .map(|s| s.clone())
+            .unwrap_or_default();
+
+        // Fan out to subscribers
+        for sub in &subscriptions {
+            match sub {
+                Subscription::Sqs { endpoint, .. } => {
+                    if let Some(ref callback) = self.sqs_fanout {
+                        let queue_name = endpoint
+                            .strip_prefix("http://localhost:4566/")
+                            .or_else(|| endpoint.strip_prefix("http://127.0.0.1:4566/"))
+                            .unwrap_or(endpoint);
+
+                        let sns_message = serde_json::json!({
+                            "Type": "Notification",
+                            "MessageId": message_id,
+                            "TopicArn": topic.arn,
+                            "Subject": subject,
+                            "Message": message,
+                            "Timestamp": chrono::Utc::now().to_rfc3339(),
+                        });
+
+                        callback(queue_name, &sns_message.to_string());
+                        info!(topic = %topic_name, queue = %queue_name, "Published to SQS");
+                    }
+                }
+                Subscription::Lambda { endpoint, .. } => {
+                    info!(topic = %topic_name, lambda = %endpoint, 
+                        message_id = %message_id, "Would publish to Lambda");
+                }
+                Subscription::Http { endpoint, .. } | Subscription::Https { endpoint, .. } => {
+                    info!(topic = %topic_name, http = %endpoint, 
+                        message_id = %message_id, "Would publish to HTTP");
+                }
+                Subscription::Email { endpoint, .. } => {
+                    info!(topic = %topic_name, email = %endpoint, 
+                        message_id = %message_id, "Would publish to Email");
+                }
+            }
+        }
+
+        info!(topic = %topic_name, arn = %topic.arn, message_id = %message_id,
+            subscriber_count = subscriptions.len(), "Published message");
+
+        Ok(message_id)
     }
 }

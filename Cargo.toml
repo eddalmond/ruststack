@@ -8,6 +8,7 @@ members = [
     "ruststack-dynamodb",
     "ruststack-lambda",
     "ruststack-secretsmanager",
+    "ruststack-cognito",
     "ruststack-iam",
     "ruststack-apigateway",
     "ruststack-firehose",
@@ -80,6 +81,12 @@ clap = { version = "4.4", features = ["derive", "env"] }
 # Configuration
 config = "0.14"
 toml = "0.8"
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# JWT for Cognito
+jsonwebtoken = "9.2"
 
 # S3 framework (not using - implementing natively with axum)
 # s3s = "0.10"

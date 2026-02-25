@@ -6,6 +6,7 @@
 //! - Secret versioning (AWSCURRENT, AWSPREVIOUS)
 
 pub mod handlers;
+pub mod persistent;
 mod storage;
 
 pub use handlers::handle_request;

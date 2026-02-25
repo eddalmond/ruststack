@@ -57,6 +57,61 @@ pub struct SecretsManagerStorage {
     secrets: DashMap<String, Secret>,
 }
 
+impl SecretsManagerStorageTrait for SecretsManagerStorage {
+    fn create_secret(
+        &self,
+        name: &str,
+        description: Option<String>,
+        kms_key_id: Option<String>,
+        secret_string: Option<String>,
+        secret_binary: Option<String>,
+        tags: std::collections::HashMap<String, String>,
+    ) -> Result<Secret, SecretsManagerError> {
+        self.create_secret_impl(
+            name,
+            description,
+            kms_key_id,
+            secret_string,
+            secret_binary,
+            tags,
+        )
+    }
+
+    fn get_secret_value(
+        &self,
+        secret_id: &str,
+        version_id: Option<&str>,
+        version_stage: Option<&str>,
+    ) -> Result<(Secret, SecretVersion), SecretsManagerError> {
+        self.get_secret_value_impl(secret_id, version_id, version_stage)
+    }
+
+    fn put_secret_value(
+        &self,
+        secret_id: &str,
+        secret_string: Option<String>,
+        secret_binary: Option<String>,
+    ) -> Result<(Secret, SecretVersion), SecretsManagerError> {
+        self.put_secret_value_impl(secret_id, secret_string, secret_binary)
+    }
+
+    fn delete_secret(
+        &self,
+        secret_id: &str,
+        force_delete: bool,
+    ) -> Result<Secret, SecretsManagerError> {
+        self.delete_secret_impl(secret_id, force_delete)
+    }
+
+    fn list_secrets(&self) -> Vec<Secret> {
+        self.list_secrets_impl()
+    }
+
+    fn describe_secret(&self, secret_id: &str) -> Result<Secret, SecretsManagerError> {
+        self.describe_secret_impl(secret_id)
+    }
+}
+
 impl SecretsManagerStorage {
     pub fn new() -> Self {
         Self {
@@ -65,7 +120,7 @@ impl SecretsManagerStorage {
     }
 
     /// Create a new secret
-    pub fn create_secret(
+    pub fn create_secret_impl(
         &self,
         name: &str,
         description: Option<String>,
@@ -131,7 +186,7 @@ impl SecretsManagerStorage {
     }
 
     /// Get secret value
-    pub fn get_secret_value(
+    pub fn get_secret_value_impl(
         &self,
         secret_id: &str,
         version_id: Option<&str>,
@@ -179,7 +234,7 @@ impl SecretsManagerStorage {
     }
 
     /// Put a new secret value
-    pub fn put_secret_value(
+    pub fn put_secret_value_impl(
         &self,
         secret_id: &str,
         secret_string: Option<String>,
@@ -233,7 +288,7 @@ impl SecretsManagerStorage {
     }
 
     /// Delete a secret
-    pub fn delete_secret(
+    pub fn delete_secret_impl(
         &self,
         secret_id: &str,
         force_delete: bool,
@@ -255,12 +310,12 @@ impl SecretsManagerStorage {
     }
 
     /// List all secrets
-    pub fn list_secrets(&self) -> Vec<Secret> {
+    pub fn list_secrets_impl(&self) -> Vec<Secret> {
         self.secrets.iter().map(|r| r.value().clone()).collect()
     }
 
     /// Describe a secret
-    pub fn describe_secret(&self, secret_id: &str) -> Result<Secret, SecretsManagerError> {
+    pub fn describe_secret_impl(&self, secret_id: &str) -> Result<Secret, SecretsManagerError> {
         self.get_secret(secret_id)
     }
 }
@@ -279,17 +334,68 @@ pub enum SecretsManagerError {
 
     #[error("Decryption failure")]
     DecryptionFailure,
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 /// State for Secrets Manager handlers
 pub struct SecretsManagerState {
-    pub storage: Arc<SecretsManagerStorage>,
+    pub storage: Arc<dyn SecretsManagerStorageTrait + Send + Sync>,
+}
+
+pub trait SecretsManagerStorageTrait: Send + Sync {
+    fn create_secret(
+        &self,
+        name: &str,
+        description: Option<String>,
+        kms_key_id: Option<String>,
+        secret_string: Option<String>,
+        secret_binary: Option<String>,
+        tags: std::collections::HashMap<String, String>,
+    ) -> Result<Secret, SecretsManagerError>;
+
+    fn get_secret_value(
+        &self,
+        secret_id: &str,
+        version_id: Option<&str>,
+        version_stage: Option<&str>,
+    ) -> Result<(Secret, SecretVersion), SecretsManagerError>;
+
+    fn put_secret_value(
+        &self,
+        secret_id: &str,
+        secret_string: Option<String>,
+        secret_binary: Option<String>,
+    ) -> Result<(Secret, SecretVersion), SecretsManagerError>;
+
+    fn delete_secret(
+        &self,
+        secret_id: &str,
+        force_delete: bool,
+    ) -> Result<Secret, SecretsManagerError>;
+
+    fn list_secrets(&self) -> Vec<Secret>;
+
+    fn describe_secret(&self, secret_id: &str) -> Result<Secret, SecretsManagerError>;
 }
 
 impl SecretsManagerState {
     pub fn new() -> Self {
         Self {
             storage: Arc::new(SecretsManagerStorage::new()),
+        }
+    }
+
+    pub fn with_persistence(data_dir: &std::path::Path) -> Option<Self> {
+        match crate::persistent::PersistentStorage::new(&data_dir.join("secretsmanager")) {
+            Ok(p) => Some(Self {
+                storage: Arc::new(p),
+            }),
+            Err(e) => {
+                tracing::warn!("Failed to initialize Secrets Manager persistence: {}", e);
+                None
+            }
         }
     }
 }

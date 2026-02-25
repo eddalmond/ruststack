@@ -14,5 +14,9 @@ hex.workspace = true
 chrono.workspace = true
 percent-encoding.workspace = true
 url.workspace = true
+axum.workspace = true
+tower.workspace = true
+tracing.workspace = true
+http.workspace = true
 
 [dev-dependencies]

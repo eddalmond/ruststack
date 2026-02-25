@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -35,7 +36,7 @@ pub enum StorageError {
 }
 
 /// Object metadata
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ObjectMetadata {
     pub content_type: Option<String>,
     pub content_encoding: Option<String>,

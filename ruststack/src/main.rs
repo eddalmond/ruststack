@@ -56,24 +56,89 @@ struct Args {
     #[arg(long, env = "RUSTSTACK_DATA_DIR")]
     data_dir: Option<String>,
 
-    /// Log level (trace, debug, info, warn, error)
-    #[arg(long, default_value = "info", env = "RUSTSTACK_LOG_LEVEL")]
-    log_level: String,
+    /// Enable persistence (use RUSTSTACK_PERSISTENCE=1 or PERSISTENCE=1)
+    #[arg(long, env = "RUSTSTACK_PERSISTENCE")]
+    persistence: bool,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // Initialize tracing
+    // Load environment configuration (for SERVICES filtering and log level)
+    let env_config = config::EnvConfig::from_env();
+
+    // Determine effective service states (CLI args can override, or use SERVICES env)
+    let s3_enabled = if !env_config.services.is_empty() {
+        env_config.is_service_enabled("s3") && args.s3
+    } else {
+        args.s3
+    };
+
+    let dynamodb_enabled = if !env_config.services.is_empty() {
+        env_config.is_service_enabled("dynamodb") && args.dynamodb
+    } else {
+        args.dynamodb
+    };
+
+    let lambda_enabled = if !env_config.services.is_empty() {
+        env_config.is_service_enabled("lambda") && args.lambda
+    } else {
+        args.lambda
+    };
+
+    // Initialize tracing with configured log level
+    let log_level_str = match env_config.log_level {
+        tracing::Level::TRACE => "trace",
+        tracing::Level::DEBUG => "debug",
+        tracing::Level::INFO => "info",
+        tracing::Level::WARN => "warn",
+        tracing::Level::ERROR => "error",
+    };
+
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("ruststack={},tower_http=debug", args.log_level).into()
-            }),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| format!("ruststack={},tower_http=debug", log_level_str).into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    info!("Starting RustStack...");
+    info!("  Version: {}", env!("CARGO_PKG_VERSION"));
+    info!("  Host: {}:{}", args.host, args.port);
+    info!(
+        "  Persistence: {}",
+        if args.persistence || env_config.persistence {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+    info!("  LocalStack Host: {}", env_config.localstack_host);
+    info!("  Use SSL: {}", env_config.use_ssl);
+    info!("  S3: {}", if s3_enabled { "enabled" } else { "disabled" });
+    info!(
+        "  DynamoDB: {}",
+        if dynamodb_enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+    info!(
+        "  Lambda: {}",
+        if lambda_enabled {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+
+    // Print SERVICES filter if set
+    if !env_config.services.is_empty() {
+        info!("  Services Filter: {}", env_config.services.join(", "));
+    }
 
     // Parse Lambda executor mode
     let lambda_executor = args
@@ -87,18 +152,6 @@ async fn main() -> anyhow::Result<()> {
             ruststack_lambda::ExecutorMode::Subprocess
         });
 
-    info!("Starting RustStack...");
-    info!("  S3: {}", if args.s3 { "enabled" } else { "disabled" });
-    info!(
-        "  DynamoDB: {}",
-        if args.dynamodb { "enabled" } else { "disabled" }
-    );
-    info!(
-        "  Lambda: {} (executor: {:?})",
-        if args.lambda { "enabled" } else { "disabled" },
-        lambda_executor
-    );
-
     // Build Docker executor config
     let docker_config = ruststack_lambda::DockerExecutorConfig {
         container_ttl: std::time::Duration::from_secs(args.lambda_container_ttl),
@@ -111,17 +164,25 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
+    // Determine if persistence is enabled (will be used in Phase 1)
+    let persistence_enabled = args.persistence || env_config.persistence;
+
+    // Get data directory
+    let data_dir = args.data_dir.map(std::path::PathBuf::from);
+
     // Build services
-    let state = router::AppState::new_with_lambda_config(
-        args.s3,
-        args.dynamodb,
-        args.lambda,
+    let state = router::AppState::new_with_config(
+        s3_enabled,
+        dynamodb_enabled,
+        lambda_enabled,
         lambda_executor,
         docker_config,
+        persistence_enabled,
+        data_dir.as_deref(),
     );
 
     // Create router
-    let app = router::create_router(state);
+    let app = router::create_router(state, env_config);
 
     // Start server
     let addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;

@@ -3,6 +3,7 @@
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::info;
 
@@ -90,7 +91,7 @@ fn simple_md5(input: &str) -> u128 {
     hash
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SqsStorage {
     queues: DashMap<String, Queue>,
     messages: DashMap<String, VecDeque<Message>>,
@@ -221,6 +222,10 @@ pub struct SqsState {
 impl SqsState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn storage(&self) -> Arc<SqsStorage> {
+        Arc::new(self.storage.clone())
     }
 
     // Delegate methods to storage
