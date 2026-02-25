@@ -337,15 +337,15 @@ impl SnsState {
                     }
                 }
                 Subscription::Lambda { endpoint, .. } => {
-                    info!(topic = %topic_name, lambda = %endpoint, 
+                    info!(topic = %topic_name, lambda = %endpoint,
                         message_id = %message_id, "Would publish to Lambda");
                 }
                 Subscription::Http { endpoint, .. } | Subscription::Https { endpoint, .. } => {
-                    info!(topic = %topic_name, http = %endpoint, 
+                    info!(topic = %topic_name, http = %endpoint,
                         message_id = %message_id, "Would publish to HTTP");
                 }
                 Subscription::Email { endpoint, .. } => {
-                    info!(topic = %topic_name, email = %endpoint, 
+                    info!(topic = %topic_name, email = %endpoint,
                         message_id = %message_id, "Would publish to Email");
                 }
             }
