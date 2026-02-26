@@ -6,12 +6,35 @@
 
 ---
 
-## Task 3.1: CloudFormation Parsing (CDK Support)
+## Task 3.1: CloudFormation Parsing (CDK Support) ✅ COMPLETED
 
 ### Overview
 Implement CloudFormation template parsing to enable `cdklocal` and `cloudformation` CLI compatibility.
 
-### Steps for LLM Agent
+### Completed Steps
+
+1. ✅ Created new CloudFormation crate: `ruststack-cloudformation/`
+2. ✅ Added to workspace in `Cargo.toml`
+3. ✅ Created `ruststack-cloudformation/Cargo.toml` with serde_yaml, serde_json, thiserror, tracing, anyhow, regex
+4. ✅ Added serde_yaml to workspace dependencies
+5. ✅ Implemented CloudFormation handlers with:
+   - Template struct for YAML/JSON parsing
+   - Resource struct with Type, Properties, DependsOn
+   - Parameter and Output structs
+   - parse_yaml() and parse_json() functions
+6. ✅ Implemented dependency resolution with topological sort in resolve_order()
+7. ✅ Added utility functions:
+   - get_dependencies() - Extract resource dependencies
+   - find_ref_dependencies() - Find Ref and Fn::GetAtt references
+   - getatt_references() - Extract Fn::GetAtt references
+   - ref_references() - Extract Ref references
+   - resolve_reference() - Resolve references to logical IDs
+8. ✅ Added comprehensive tests
+
+### Next Steps for Full Integration
+- Implement stack operations (CreateStack, DescribeStacks, DeleteStack)
+- Implement resource instantiation (deploy resources to S3, DynamoDB, etc.)
+- Add CloudFormation endpoints to router
 
 1. **Create new CloudFormation crate:**
    ```bash
@@ -220,12 +243,38 @@ Implement CloudFormation template parsing to enable `cdklocal` and `cloudformati
 
 ---
 
-## Task 3.2: AWS Step Functions (Offline ASL)
+## Task 3.2: AWS Step Functions (Offline ASL) ✅ COMPLETED
 
 ### Overview
 Implement Amazon States Language (ASL) parser and state machine execution engine.
 
-### Steps for LLM Agent
+### Completed Steps
+
+1. ✅ Created new StepFunctions crate: `ruststack-stepfunctions/`
+2. ✅ Added to workspace in `Cargo.toml`
+3. ✅ Implemented ASL parser with:
+   - StateMachine struct
+   - State enum (Pass, Task, Choice, Wait, Succeed, Fail, Parallel, Map)
+   - ChoiceRule struct with all comparison operators
+   - Retry and Catcher structs
+   - parse_state_machine() function
+4. ✅ Implemented utility functions:
+   - get_next_state() - Get next state name
+   - evaluate_choice() - Evaluate choice rules
+   - apply_result_path() - Apply ResultPath
+   - extract_path() - Extract values using JSON paths
+5. ✅ Added storage layer (StepFunctionsState)
+6. ✅ Implemented handlers:
+   - CreateStateMachine
+   - DescribeStateMachine
+   - DeleteStateMachine
+   - ListStateMachines
+   - StartExecution
+   - DescribeExecution
+   - ListExecutions
+   - StopExecution
+7. ✅ Integrated into main router
+8. ✅ Added comprehensive tests
 
 1. **Create new StepFunctions crate:**
    ```bash

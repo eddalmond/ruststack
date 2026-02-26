@@ -2,20 +2,21 @@
 resolver = "2"
 members = [
     "ruststack",
-    "ruststack-core",
     "ruststack-auth",
     "ruststack-s3",
     "ruststack-dynamodb",
     "ruststack-lambda",
     "ruststack-secretsmanager",
-    "ruststack-cognito",
     "ruststack-iam",
     "ruststack-apigateway",
     "ruststack-firehose",
     "ruststack-sqs",
     "ruststack-sns",
+    "ruststack-cognito",
     "ruststack-test",
     "ruststack-py",
+    "ruststack-cloudformation",
+    "ruststack-stepfunctions",
 ]
 
 [workspace.package]

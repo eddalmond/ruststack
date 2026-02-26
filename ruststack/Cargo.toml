@@ -18,6 +18,8 @@ ruststack-cognito = { path = "../ruststack-cognito" }
 ruststack-firehose = { path = "../ruststack-firehose" }
 ruststack-sqs = { path = "../ruststack-sqs" }
 ruststack-sns = { path = "../ruststack-sns" }
+ruststack-stepfunctions = { path = "../ruststack-stepfunctions" }
+ruststack-cloudformation = { path = "../ruststack-cloudformation" }
 
 tokio.workspace = true
 axum.workspace = true

@@ -17,6 +17,7 @@ use tracing::{debug, info};
 
 use ruststack_apigateway::{handlers as apigateway_handlers, ApiGatewayState};
 use ruststack_auth::middleware::validate_sigv4;
+use ruststack_cloudformation::{handlers as cloudformation_handlers, CloudFormationState};
 use ruststack_cognito::{handlers as cognito_handlers, CognitoState};
 use ruststack_dynamodb::{handlers as dynamodb_handlers, DynamoDBState, DynamoDBStorage};
 use ruststack_firehose::{handlers as firehose_handlers, FirehoseState};
@@ -35,6 +36,7 @@ use ruststack_s3::{
 use ruststack_secretsmanager::{handlers as secrets_handlers, SecretsManagerState};
 use ruststack_sns::{handlers as sns_handlers, SnsState};
 use ruststack_sqs::{handlers as sqs_handlers, SqsState};
+use ruststack_stepfunctions::{handlers as stepfunctions_handlers, StepFunctionsState};
 
 use crate::cloudwatch::{self, CloudWatchLogsState};
 use crate::config::EnvConfig;
@@ -52,6 +54,8 @@ pub struct AppState {
     firehose: Arc<FirehoseState>,
     sqs: Arc<SqsState>,
     sns: Arc<SnsState>,
+    stepfunctions: Arc<StepFunctionsState>,
+    cloudformation: Arc<CloudFormationState>,
     s3_enabled: bool,
     dynamodb_enabled: bool,
     lambda_enabled: bool,
@@ -131,6 +135,10 @@ impl AppState {
         });
         let sns_state = Arc::new(sns_state);
 
+        let stepfunctions_state = Arc::new(StepFunctionsState::new());
+
+        let cloudformation_state = Arc::new(CloudFormationState::new());
+
         Self {
             s3: Arc::new(S3State {
                 storage: storage.clone(),
@@ -168,6 +176,8 @@ impl AppState {
             firehose: Arc::new(FirehoseState::new()),
             sqs: sqs_state,
             sns: sns_state,
+            stepfunctions: stepfunctions_state,
+            cloudformation: cloudformation_state,
             s3_enabled,
             dynamodb_enabled,
             lambda_enabled,
@@ -524,6 +534,24 @@ async fn handle_root(
             if target_str.starts_with("Firehose_") {
                 return firehose_handlers::handle_request(
                     State(state.firehose.clone()),
+                    headers,
+                    body,
+                )
+                .await;
+            }
+            // AWS Step Functions
+            if target_str.starts_with("AWSStepFunctions") {
+                return stepfunctions_handlers::handle_request(
+                    State(state.stepfunctions.clone()),
+                    headers,
+                    body,
+                )
+                .await;
+            }
+            // AWS CloudFormation
+            if target_str.starts_with("AWSCloudFormation") {
+                return cloudformation_handlers::handle_request(
+                    State(state.cloudformation.clone()),
                     headers,
                     body,
                 )
