@@ -15,6 +15,7 @@ members = [
     "ruststack-sqs",
     "ruststack-sns",
     "ruststack-test",
+    "ruststack-py",
 ]
 
 [workspace.package]

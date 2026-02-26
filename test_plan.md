@@ -12,97 +12,103 @@ This document outlines the test coverage strategy for the RustStack project - a 
 |---------|-------|--------|
 | ruststack-apigateway | 3 | ✅ Basic |
 | ruststack-auth | 2 | ✅ Basic |
-| ruststack-cognito | 0 | ❌ None |
+| ruststack-cognito | 25 | ✅ Excellent |
 | ruststack-core | 6 | ✅ Good |
 | ruststack-dynamodb | ~40+ | ✅ Excellent |
-| ruststack-firehose | 1 | ⚠️ Minimal |
+| ruststack-firehose | 16 | ✅ Good |
 | ruststack-iam | ~5 | ✅ Basic |
 | ruststack-lambda | ~10 | ✅ Good |
 | ruststack-s3 | ~15 | ✅ Good |
-| ruststack-secretsmanager | ~3 | ⚠️ Minimal |
-| ruststack-sns | 0 | ❌ None |
-| ruststack-sqs | 0 | ❌ None |
+| ruststack-secretsmanager | 14 | ✅ Good |
+| ruststack-sns | 26 | ✅ Excellent |
+| ruststack-sqs | 23 | ✅ Excellent |
 
-**Total: ~102 tests across 12 packages**
+**Total: ~185 tests across 12 packages**
 
 ## Package-by-Package Test Strategy
 
-### 1. ruststack-cognito ❌ (Priority: HIGH)
+### 1. ruststack-cognito ✅ (Priority: LOW)
 
 Cognito handles user authentication and pool management.
 
-**Current:** No tests
+**Current:** 25 tests (excellent)
 
-**Required Tests:**
-- `UserPool::new()` - pool creation with valid region/name
-- `UserPool::create_user()` - user creation flow
-- `UserStatus` enum variants - serialization/deserialization
+Tests cover:
+- User pool creation with valid region/name
+- User creation flow
+- UserStatus enum variants - serialization/deserialization
 - JWT token generation and validation
 - Authentication flow (initiate_auth, respond_to_auth_challenge)
 - User attribute handling
+- Enable/disable user
 
-**Test File Location:** `ruststack-cognito/src/storage.rs` (add `#[cfg(test)]` module)
+**Test File Location:** `ruststack-cognito/src/storage.rs`
 
-### 2. ruststack-sns ❌ (Priority: HIGH)
+### 2. ruststack-sns ✅ (Priority: LOW)
 
 SNS handles pub/sub messaging and topic management.
 
-**Current:** No tests
+**Current:** 26 tests (excellent)
 
-**Required Tests:**
-- `SnsState::new()` - state initialization
-- `Topic::create()` - topic creation
-- `Subscription` enum variants - subscription handling
+Tests cover:
+- SnsState initialization
+- Topic creation
+- Subscription enum variants - subscription handling
 - Message publishing to topics
 - Fan-out to SQS
 - HTTP/Lambda/Email subscription protocols
 
 **Test File Location:** `ruststack-sns/src/storage.rs`
 
-### 3. ruststack-sqs ❌ (Priority: HIGH)
+### 3. ruststack-sqs ✅ (Priority: LOW)
 
 SQS handles queue management and message processing.
 
-**Current:** No tests
+**Current:** 23 tests (excellent)
 
-**Required Tests:**
-- `Queue::create()` - queue creation
-- `Queue::send_message()` - message sending
-- `Queue::receive_message()` - message retrieval
-- `Queue::delete_message()` - message deletion
+Tests cover:
+- Queue creation
+- Queue deletion
+- Message sending
+- Message retrieval
+- Message deletion
 - Dead letter queue handling
 - FIFO vs standard queue differences
 - Message batching
+- Approximate receive count
 
 **Test File Location:** `ruststack-sqs/src/storage.rs`
 
-### 4. ruststack-secretsmanager ⚠️ (Priority: MEDIUM)
+### 4. ruststack-secretsmanager ✅ (Priority: LOW)
 
 Secrets Manager handles secure parameter storage.
 
-**Current:** ~3 tests (minimal)
+**Current:** 14 tests (good)
 
-**Required Tests:**
-- Secret creation with various data types
-- Secret versioning
-- Secret rotation simulation
-- GetSecretValue flow
-- Access policy enforcement
+Tests cover:
+- Secret creation with various data types (string, binary)
+- Secret versioning and rotation
+- GetSecretValue flow with version stages
+- Delete secret (scheduled vs force)
+- Describe secret
+- List secrets
+- Secret tags
 
 **Test File Location:** `ruststack-secretsmanager/src/storage.rs`
 
-### 5. ruststack-firehose ⚠️ (Priority: MEDIUM)
+### 5. ruststack-firehose ✅ (Priority: LOW)
 
 Firehose handles streaming data to destinations.
 
-**Current:** ~1 test (minimal)
+**Current:** 16 tests (good)
 
-**Required Tests:**
+Tests cover:
 - Delivery stream creation
 - Record batching
-- Destination types (S3, ES, Redshift)
+- S3 destination configuration
 - Buffering configuration
-- Error handling and retries
+- Describe/List/Delete delivery streams
+- Error handling for nonexistent streams
 
 **Test File Location:** `ruststack-firehose/src/storage.rs`
 
@@ -271,25 +277,25 @@ Consider adding `cargo-llvm-cov` for coverage reports:
 
 ## Priority Roadmap
 
-### Phase 1: Critical Services (Week 1-2)
-1. **ruststack-sqs** - 15 tests
+### Phase 1: Critical Services (COMPLETED)
+1. **ruststack-sqs** - 23 tests ✅
    - Queue CRUD operations
    - Message lifecycle
    - Batching
 
-2. **ruststack-sns** - 15 tests
+2. **ruststack-sns** - 26 tests ✅
    - Topic management
    - Subscription handling
    - Message publishing
 
-3. **ruststack-cognito** - 20 tests
+3. **ruststack-cognito** - 25 tests ✅
    - User pool management
    - Authentication flows
    - Token handling
 
-### Phase 2: Supporting Services (Week 3-4)
-4. **ruststack-secretsmanager** - 10 tests
-5. **ruststack-firehose** - 10 tests
+### Phase 2: Supporting Services (COMPLETED)
+4. **ruststack-secretsmanager** - 14 tests ✅
+5. **ruststack-firehose** - 16 tests ✅
 
 ### Phase 3: Enhancements (Ongoing)
 6. Add property-based tests

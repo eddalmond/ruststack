@@ -307,4 +307,157 @@ mod tests {
         let result = storage.create_delivery_stream("test-stream", "DirectPut", None, None, None);
         assert!(matches!(result, Err(FirehoseError::ResourceInUse(_))));
     }
+
+    #[test]
+    fn test_delete_delivery_stream() {
+        let storage = FirehoseStorage::new();
+        storage
+            .create_delivery_stream("to-delete", "DirectPut", None, None, None)
+            .unwrap();
+
+        let result = storage.delete_delivery_stream("to-delete");
+        assert!(result.is_ok());
+
+        let result = storage.describe_delivery_stream("to-delete");
+        assert!(matches!(result, Err(FirehoseError::ResourceNotFound(_))));
+    }
+
+    #[test]
+    fn test_delete_nonexistent_stream_fails() {
+        let storage = FirehoseStorage::new();
+
+        let result = storage.delete_delivery_stream("nonexistent");
+        assert!(matches!(result, Err(FirehoseError::ResourceNotFound(_))));
+    }
+
+    #[test]
+    fn test_describe_delivery_stream() {
+        let storage = FirehoseStorage::new();
+
+        storage
+            .create_delivery_stream("test-stream", "DirectPut", None, None, None)
+            .unwrap();
+
+        let stream = storage.describe_delivery_stream("test-stream").unwrap();
+
+        assert_eq!(stream.delivery_stream_name, "test-stream");
+        assert_eq!(stream.delivery_stream_type, "DirectPut");
+    }
+
+    #[test]
+    fn test_describe_nonexistent_stream_fails() {
+        let storage = FirehoseStorage::new();
+
+        let result = storage.describe_delivery_stream("nonexistent");
+        assert!(matches!(result, Err(FirehoseError::ResourceNotFound(_))));
+    }
+
+    #[test]
+    fn test_list_delivery_streams() {
+        let storage = FirehoseStorage::new();
+
+        storage
+            .create_delivery_stream("stream-1", "DirectPut", None, None, None)
+            .unwrap();
+        storage
+            .create_delivery_stream("stream-2", "DirectPut", None, None, None)
+            .unwrap();
+
+        let streams = storage.list_delivery_streams(None);
+        assert_eq!(streams.len(), 2);
+    }
+
+    #[test]
+    fn test_list_delivery_streams_empty() {
+        let storage = FirehoseStorage::new();
+        let streams = storage.list_delivery_streams(None);
+        assert!(streams.is_empty());
+    }
+
+    #[test]
+    fn test_list_delivery_streams_with_limit() {
+        let storage = FirehoseStorage::new();
+
+        for i in 0..5 {
+            storage
+                .create_delivery_stream(&format!("stream-{}", i), "DirectPut", None, None, None)
+                .unwrap();
+        }
+
+        let streams = storage.list_delivery_streams(Some(3));
+        assert_eq!(streams.len(), 3);
+    }
+
+    #[test]
+    fn test_delivery_stream_with_s3_destination() {
+        let storage = FirehoseStorage::new();
+
+        let stream = storage
+            .create_delivery_stream(
+                "s3-stream",
+                "DirectPut",
+                Some("arn:aws:s3:::my-bucket".to_string()),
+                Some("firehose/".to_string()),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(
+            stream.s3_bucket_arn,
+            Some("arn:aws:s3:::my-bucket".to_string())
+        );
+        assert_eq!(stream.s3_prefix, Some("firehose/".to_string()));
+        assert_eq!(stream.destination_type, "ExtendedS3");
+    }
+
+    #[test]
+    fn test_delivery_stream_with_buffering_hints() {
+        let storage = FirehoseStorage::new();
+
+        let buffering = BufferingHints {
+            size_in_mbs: 10,
+            interval_in_seconds: 60,
+        };
+
+        let stream = storage
+            .create_delivery_stream(
+                "buffered-stream",
+                "DirectPut",
+                None,
+                None,
+                Some(buffering.clone()),
+            )
+            .unwrap();
+
+        assert_eq!(stream.buffering_hints.size_in_mbs, 10);
+        assert_eq!(stream.buffering_hints.interval_in_seconds, 60);
+    }
+
+    #[test]
+    fn test_default_buffering_hints() {
+        let storage = FirehoseStorage::new();
+
+        let stream = storage
+            .create_delivery_stream("default-buffered", "DirectPut", None, None, None)
+            .unwrap();
+
+        assert_eq!(stream.buffering_hints.size_in_mbs, 5);
+        assert_eq!(stream.buffering_hints.interval_in_seconds, 300);
+    }
+
+    #[test]
+    fn test_put_record_to_nonexistent_stream_fails() {
+        let storage = FirehoseStorage::new();
+
+        let result = storage.put_record("nonexistent", b"data".to_vec());
+        assert!(matches!(result, Err(FirehoseError::ResourceNotFound(_))));
+    }
+
+    #[test]
+    fn test_put_record_batch_to_nonexistent_stream_fails() {
+        let storage = FirehoseStorage::new();
+
+        let result = storage.put_record_batch("nonexistent", vec![b"data".to_vec()]);
+        assert!(matches!(result, Err(FirehoseError::ResourceNotFound(_))));
+    }
 }

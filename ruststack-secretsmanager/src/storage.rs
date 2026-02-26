@@ -492,4 +492,198 @@ mod tests {
             Err(SecretsManagerError::ResourceNotFound(_))
         ));
     }
+
+    #[test]
+    fn test_delete_secret_scheduled() {
+        let storage = SecretsManagerStorage::new();
+
+        storage
+            .create_secret(
+                "to-delete",
+                None,
+                None,
+                Some("value".to_string()),
+                None,
+                HashMap::new(),
+            )
+            .unwrap();
+
+        let result = storage.delete_secret("to-delete", false).unwrap();
+
+        assert!(result.deleted_date.is_some());
+    }
+
+    #[test]
+    fn test_delete_secret_force() {
+        let storage = SecretsManagerStorage::new();
+
+        storage
+            .create_secret(
+                "to-force-delete",
+                None,
+                None,
+                Some("value".to_string()),
+                None,
+                HashMap::new(),
+            )
+            .unwrap();
+
+        let result = storage.delete_secret("to-force-delete", true).unwrap();
+
+        let list = storage.list_secrets();
+        assert!(list.is_empty());
+    }
+
+    #[test]
+    fn test_delete_nonexistent_secret_fails() {
+        let storage = SecretsManagerStorage::new();
+
+        let result = storage.delete_secret("nonexistent", true);
+        assert!(matches!(
+            result,
+            Err(SecretsManagerError::ResourceNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn test_list_secrets() {
+        let storage = SecretsManagerStorage::new();
+
+        storage
+            .create_secret(
+                "secret-1",
+                None,
+                None,
+                Some("v1".to_string()),
+                None,
+                HashMap::new(),
+            )
+            .unwrap();
+        storage
+            .create_secret(
+                "secret-2",
+                None,
+                None,
+                Some("v2".to_string()),
+                None,
+                HashMap::new(),
+            )
+            .unwrap();
+
+        let secrets = storage.list_secrets();
+        assert_eq!(secrets.len(), 2);
+    }
+
+    #[test]
+    fn test_list_secrets_empty() {
+        let storage = SecretsManagerStorage::new();
+        let secrets = storage.list_secrets();
+        assert!(secrets.is_empty());
+    }
+
+    #[test]
+    fn test_describe_secret() {
+        let storage = SecretsManagerStorage::new();
+
+        storage
+            .create_secret(
+                "my-secret",
+                Some("A test secret".to_string()),
+                None,
+                Some("value".to_string()),
+                None,
+                HashMap::new(),
+            )
+            .unwrap();
+
+        let secret = storage.describe_secret("my-secret").unwrap();
+
+        assert_eq!(secret.name, "my-secret");
+        assert_eq!(secret.description, Some("A test secret".to_string()));
+    }
+
+    #[test]
+    fn test_describe_nonexistent_secret_fails() {
+        let storage = SecretsManagerStorage::new();
+
+        let result = storage.describe_secret("nonexistent");
+        assert!(matches!(
+            result,
+            Err(SecretsManagerError::ResourceNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn test_get_secret_by_version_id() {
+        let storage = SecretsManagerStorage::new();
+
+        storage
+            .create_secret(
+                "versioned",
+                None,
+                None,
+                Some("v1".to_string()),
+                None,
+                HashMap::new(),
+            )
+            .unwrap();
+
+        let (_, v1) = storage
+            .get_secret_value("versioned", None, Some("AWSCURRENT"))
+            .unwrap();
+
+        let vid = v1.version_id.clone();
+        let (_, retrieved) = storage
+            .get_secret_value("versioned", Some(&vid), None)
+            .unwrap();
+
+        assert_eq!(retrieved.version_id, vid);
+    }
+
+    #[test]
+    fn test_secret_with_tags() {
+        let storage = SecretsManagerStorage::new();
+
+        let mut tags = HashMap::new();
+        tags.insert("env".to_string(), "prod".to_string());
+        tags.insert("team".to_string(), "backend".to_string());
+
+        let secret = storage
+            .create_secret(
+                "tagged-secret",
+                None,
+                None,
+                Some("value".to_string()),
+                None,
+                tags,
+            )
+            .unwrap();
+
+        assert_eq!(secret.tags.get("env"), Some(&"prod".to_string()));
+        assert_eq!(secret.tags.get("team"), Some(&"backend".to_string()));
+    }
+
+    #[test]
+    fn test_secret_binary_value() {
+        let storage = SecretsManagerStorage::new();
+
+        let binary_value = "SGVsbG8gV29ybGQ=".to_string(); // base64 encoded "Hello World"
+        let secret = storage
+            .create_secret(
+                "binary-secret",
+                None,
+                None,
+                None,
+                Some(binary_value.clone()),
+                HashMap::new(),
+            )
+            .unwrap();
+
+        let (_, version) = storage
+            .get_secret_value("binary-secret", None, None)
+            .unwrap();
+
+        assert_eq!(version.secret_binary, Some(binary_value));
+        assert!(version.secret_string.is_none());
+    }
 }

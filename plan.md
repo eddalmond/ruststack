@@ -7,6 +7,7 @@ As an AI, I have formatted this roadmap with explicit "Agent Directives," "Accep
 - [Phase 0: Foundation & Multiplexing Engine](./plan_phase0.md) ✅ COMPLETED
 - [Phase 1: Core Parity & State Engine](./plan_phase1.md) ✅ COMPLETED
 - [Phase 2: Compute Emulation & Paywall Breakers](./plan_phase2.md) - Months 4-6
+- Phase 2.5: Python Bindings (Priority: HIGH)
 - [Phase 3: Advanced Orchestration & Shift-Left Security](./plan_phase3.md) - Months 7-12
 
 ---
@@ -229,6 +230,56 @@ Objective: Implement serverless compute and highly demanded security/identity se
 
 Phase 2 Acceptance Criteria:
 A developer must be able to boot a local web application that successfully fetches a JWT from the mocked Cognito service and retrieves a database password from the mocked Secrets Manager without requiring an active internet connection or a paid license key.
+
+---
+
+## Phase 2.5: Python Bindings (Priority: HIGH)
+
+Enable RustStack to be used directly in Python test suites without Docker, for minimal-overhead local testing.
+
+Objective: Create Python bindings using pyo3 for in-process AWS service mocking.
+
+### Task 2.5.1: Storage Trait Refactoring
+
+Refactor storage crates to expose synchronous (non-async) methods suitable for FFI:
+
+- Review `ruststack-s3`, `ruststack-dynamodb`, `ruststack-secretsmanager`, `ruststack-firehose`, `ruststack-iam`, `ruststack-sns`, `ruststack-sqs`
+- Extract async methods into a trait, provide sync implementations alongside
+- Make storage modules public for pyo3 access
+
+**Agent Directive:** Focus on making storage implementations accessible without requiring async runtime.
+
+### Task 2.5.2: pyo3 Bindings Core
+
+Create `ruststack-py` crate with pyo3 bindings:
+
+- Set up `ruststack-py/Cargo.toml` with pyo3 dependency
+- Implement `RustStack` struct wrapping all service storages
+- Bind each service: S3, DynamoDB, Secrets Manager, Firehose, IAM, SNS, SQS
+- Handle type conversions between Rust and Python types
+- Add proper error handling with Python exceptions
+
+### Task 2.5.3: Build & Distribution
+
+Make bindings easy to install:
+
+- Configure `maturin` for building
+- Add `ruststack-py` to CI/CD for wheel building
+- Document installation: `pip install ruststack-py`
+
+### Task 2.5.4: Integration Tests
+
+Create comprehensive Python test coverage:
+
+- Add `tests/integration/test_inprocess.py` with full service coverage
+- Test all CRUD operations for each service
+- Benchmark against Docker method for performance comparison
+
+Phase 2.5 Acceptance Criteria:
+A Python developer must be able to install `ruststack-py`, write `import ruststack_py; rs = ruststack_py.RustStack()`, and use it in pytest fixtures without running any containers.
+
+---
+
 🚀 Phase 3: Advanced Orchestration & Shift-Left Security (Months 7-12)
 
 Solidify RustStack as an enterprise-grade tool by handling complex orchestration and security validations.
