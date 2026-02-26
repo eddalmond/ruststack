@@ -87,7 +87,7 @@ toml = "0.8"
 rusqlite = { version = "0.31", features = ["bundled"] }
 
 # JWT for Cognito
-jsonwebtoken = "9.2"
+jsonwebtoken = "10.3"
 
 # S3 framework (not using - implementing natively with axum)
 # s3s = "0.10"
