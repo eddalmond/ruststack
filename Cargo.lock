@@ -2661,7 +2661,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -2700,7 +2700,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-apigateway"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "bytes",
@@ -2717,7 +2717,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-auth"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "chrono",
@@ -2735,7 +2735,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-cognito"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "bytes",
@@ -2753,7 +2753,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.21.7",
  "chrono",
@@ -2766,7 +2766,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-dynamodb"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aws-config",
  "aws-sdk-dynamodb",
@@ -2786,7 +2786,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-firehose"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "base64 0.21.7",
@@ -2804,7 +2804,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-iam"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "bytes",
@@ -2822,7 +2822,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-lambda"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aws-config",
  "aws-sdk-lambda",
@@ -2847,7 +2847,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-s3"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "aws-config",
@@ -2879,7 +2879,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-secretsmanager"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "bytes",
@@ -2898,7 +2898,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-sns"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "bytes",
@@ -2915,7 +2915,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-sqs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "bytes",
@@ -2933,7 +2933,7 @@ dependencies = [
 
 [[package]]
 name = "ruststack-test"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "portpicker",
  "rand",
