@@ -300,11 +300,11 @@ Objective: Implement CloudFormation, Step Functions, and deterministic IAM evalu
 
     Task 3.3: Shift-Left Security (Explainable IAM)
 
-        Introduce the ENFORCE_IAM=1 environment variable.
+        Introduce the ENFORCE_IAM=1 environment variable. ✅
 
-        Implement a deterministic policy evaluation engine in Rust.
+        Implement a deterministic policy evaluation engine in Rust. ✅
 
-        Parse standard AWS JSON policies attached to mocked roles and intercept API calls to validate Allow/Deny rules, returning realistic AccessDeniedException errors when triggered.
+        Parse standard AWS JSON policies attached to mocked roles and intercept API calls to validate Allow/Deny rules, returning realistic AccessDeniedException errors when triggered. ✅
 
 Phase 3 Acceptance Criteria:
 Executing cdklocal deploy with a template containing a Step Function and strict IAM roles must deploy successfully. Attempting to access an S3 bucket with a local IAM role that lacks s3:GetObject permissions must result in a deterministic access denial.
