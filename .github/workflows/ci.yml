@@ -129,7 +129,7 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [fmt, clippy, test, integration]
+    needs: [fmt, clippy, test, integration, python-bindings]
     if: always()
     steps:
       - name: Check all jobs passed
@@ -137,8 +137,40 @@ jobs:
           if [[ "${{ needs.fmt.result }}" != "success" ]] || \
              [[ "${{ needs.clippy.result }}" != "success" ]] || \
              [[ "${{ needs.test.result }}" != "success" ]] || \
-             [[ "${{ needs.integration.result }}" != "success" ]]; then
+             [[ "${{ needs.integration.result }}" != "success" ]] || \
+             [[ "${{ needs.python-bindings.result }}" != "success" ]]; then
             echo "One or more jobs failed"
             exit 1
           fi
           echo "All CI jobs passed!"
+
+  # Build Python bindings
+  python-bindings:
+    name: Python Bindings
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build Python bindings
+        run: |
+          cd ruststack-py
+          maturin build --release
+
+      - name: Install and test bindings
+        run: |
+          pip install --find-links ruststack-py/target/release/wheels ruststack-py
+          python -c "import ruststack_py; print('Python bindings imported successfully!')"

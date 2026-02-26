@@ -263,17 +263,17 @@ Create `ruststack-py` crate with pyo3 bindings:
 
 Make bindings easy to install:
 
-- Configure `maturin` for building
-- Add `ruststack-py` to CI/CD for wheel building
+- Configure `maturin` for building ✅
+- Add `ruststack-py` to CI/CD for wheel building ✅
 - Document installation: `pip install ruststack-py`
 
 ### Task 2.5.4: Integration Tests
 
 Create comprehensive Python test coverage:
 
-- Add `tests/integration/test_inprocess.py` with full service coverage
-- Test all CRUD operations for each service
-- Benchmark against Docker method for performance comparison
+- Add `tests/integration/test_inprocess.py` with full service coverage ✅
+- Test all CRUD operations for each service ✅
+- Benchmark against Docker method for performance comparison (future work)
 
 Phase 2.5 Acceptance Criteria:
 A Python developer must be able to install `ruststack-py`, write `import ruststack_py; rs = ruststack_py.RustStack()`, and use it in pytest fixtures without running any containers.
