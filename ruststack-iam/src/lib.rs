@@ -5,7 +5,7 @@
 //! and policies without enforcing actual permissions.
 
 pub mod handlers;
-mod storage;
+pub mod storage;
 
 pub use handlers::handle_request;
 pub use storage::{IamState, IamStorage};

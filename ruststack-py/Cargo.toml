@@ -17,6 +17,8 @@ ruststack-firehose = { path = "../ruststack-firehose" }
 ruststack-iam = { path = "../ruststack-iam" }
 futures = "0.3"
 bytes = "1"
+serde = "1"
+serde_json = "1"
 
 [build-dependencies]
 pyo3-build-config = "0.22"

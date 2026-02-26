@@ -7,7 +7,7 @@
 
 pub mod handlers;
 pub mod persistent;
-mod storage;
+pub mod storage;
 
 pub use handlers::handle_request;
-pub use storage::{SecretsManagerState, SecretsManagerStorage};
+pub use storage::{SecretsManagerState, SecretsManagerStorage, SecretsManagerStorageTrait};

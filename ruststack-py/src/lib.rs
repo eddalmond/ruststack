@@ -23,7 +23,11 @@
 #![allow(clippy::useless_conversion)]
 
 use pyo3::prelude::*;
+use ruststack_firehose::FirehoseStorage;
+use ruststack_iam::IamStorage;
 use ruststack_s3::storage::{EphemeralStorage, ObjectStorage};
+use ruststack_secretsmanager::{SecretsManagerStorage, SecretsManagerStorageTrait};
+use ruststack_sns::SnsState;
 use ruststack_sqs::SqsStorage;
 use std::sync::Arc;
 
@@ -31,6 +35,10 @@ use std::sync::Arc;
 pub struct RustStack {
     s3: Arc<EphemeralStorage>,
     sqs: Arc<SqsStorage>,
+    secrets: Arc<SecretsManagerStorage>,
+    firehose: Arc<FirehoseStorage>,
+    iam: Arc<IamStorage>,
+    sns: SnsState,
 }
 
 #[pymethods]
@@ -40,6 +48,10 @@ impl RustStack {
         Self {
             s3: Arc::new(EphemeralStorage::new()),
             sqs: Arc::new(SqsStorage::new()),
+            secrets: Arc::new(SecretsManagerStorage::new()),
+            firehose: Arc::new(FirehoseStorage::new()),
+            iam: Arc::new(IamStorage::new()),
+            sns: SnsState::new(),
         }
     }
 
@@ -144,122 +156,255 @@ impl RustStack {
 
     // ============ Secrets Manager ============
 
-    fn secrets_create_secret(&self, _name: &str, _value: &str) -> PyResult<String> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Secrets Manager: use Docker method",
-        ))
+    fn secrets_create_secret(&self, name: &str, value: &str) -> PyResult<String> {
+        use std::collections::HashMap;
+        self.secrets
+            .create_secret(
+                name,
+                None,
+                None,
+                Some(value.to_string()),
+                None,
+                HashMap::new(),
+            )
+            .map(|s| s.name)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    fn secrets_get_secret_value(&self, _name: &str) -> PyResult<Option<String>> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Secrets Manager: use Docker method",
-        ))
+    fn secrets_get_secret_value(&self, name: &str) -> PyResult<Option<String>> {
+        match self.secrets.get_secret_value(name, None, None) {
+            Ok((_s, v)) => Ok(v.secret_string),
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("ResourceNotFound") {
+                    Ok(None)
+                } else {
+                    Err(pyo3::exceptions::PyRuntimeError::new_err(err_str))
+                }
+            }
+        }
     }
 
-    fn secrets_put_secret_value(&self, _name: &str, _value: &str) -> PyResult<()> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Secrets Manager: use Docker method",
-        ))
+    fn secrets_put_secret_value(&self, name: &str, value: &str) -> PyResult<()> {
+        self.secrets
+            .put_secret_value(name, Some(value.to_string()), None)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    fn secrets_delete_secret(&self, _name: &str) -> PyResult<()> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Secrets Manager: use Docker method",
-        ))
+    fn secrets_delete_secret(&self, name: &str) -> PyResult<()> {
+        self.secrets
+            .delete_secret(name, true)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     fn secrets_list_secrets(&self) -> PyResult<Vec<String>> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Secrets Manager: use Docker method",
-        ))
+        Ok(self
+            .secrets
+            .list_secrets()
+            .into_iter()
+            .map(|s| s.name)
+            .collect())
+    }
+
+    fn secrets_describe_secret(&self, name: &str) -> PyResult<Option<String>> {
+        match self.secrets.describe_secret(name) {
+            Ok(s) => Ok(Some(
+                serde_json::json!({
+                    "name": s.name,
+                    "arn": s.arn,
+                    "description": s.description,
+                })
+                .to_string(),
+            )),
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("ResourceNotFound") {
+                    Ok(None)
+                } else {
+                    Err(pyo3::exceptions::PyRuntimeError::new_err(err_str))
+                }
+            }
+        }
     }
 
     // ============ Firehose ============
 
-    fn firehose_create_delivery_stream(&self, _name: &str) -> PyResult<String> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Firehose: use Docker method",
-        ))
+    fn firehose_create_delivery_stream(&self, name: &str) -> PyResult<String> {
+        self.firehose
+            .create_delivery_stream(name, "DirectPut", None, None, None)
+            .map(|s| s.delivery_stream_name)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    fn firehose_put_record(&self, _stream_name: &str, _data: &str) -> PyResult<String> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Firehose: use Docker method",
-        ))
+    fn firehose_put_record(&self, stream_name: &str, data: &str) -> PyResult<String> {
+        self.firehose
+            .put_record(stream_name, data.as_bytes().to_vec())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     fn firehose_put_record_batch(
         &self,
-        _stream_name: &str,
-        _records: Vec<String>,
+        stream_name: &str,
+        records: Vec<String>,
     ) -> PyResult<usize> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Firehose: use Docker method",
-        ))
+        let records: Vec<Vec<u8>> = records.into_iter().map(|r| r.into_bytes()).collect();
+        self.firehose
+            .put_record_batch(stream_name, records)
+            .map(|r| r.record_ids.len())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    fn firehose_delete_delivery_stream(&self, _name: &str) -> PyResult<()> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "Firehose: use Docker method",
-        ))
+    fn firehose_delete_delivery_stream(&self, name: &str) -> PyResult<()> {
+        self.firehose
+            .delete_delivery_stream(name)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn firehose_list_delivery_streams(&self) -> PyResult<Vec<String>> {
+        Ok(self.firehose.list_delivery_streams(None))
+    }
+
+    fn firehose_describe_delivery_stream(&self, name: &str) -> PyResult<Option<String>> {
+        match self.firehose.describe_delivery_stream(name) {
+            Ok(s) => Ok(Some(
+                serde_json::json!({
+                    "name": s.delivery_stream_name,
+                    "type": s.delivery_stream_type,
+                })
+                .to_string(),
+            )),
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("ResourceNotFound") {
+                    Ok(None)
+                } else {
+                    Err(pyo3::exceptions::PyRuntimeError::new_err(err_str))
+                }
+            }
+        }
     }
 
     // ============ IAM ============
 
-    fn iam_create_role(&self, _name: &str, _policy: &str) -> PyResult<String> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "IAM: use Docker method",
-        ))
+    fn iam_create_role(&self, name: &str, policy: &str) -> PyResult<String> {
+        self.iam
+            .create_role(name, policy, None, None)
+            .map(|r| r.role_name)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    fn iam_get_role(&self, _name: &str) -> PyResult<Option<String>> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "IAM: use Docker method",
-        ))
+    fn iam_get_role(&self, name: &str) -> PyResult<Option<String>> {
+        match self.iam.get_role(name) {
+            Ok(r) => Ok(Some(
+                serde_json::json!({
+                    "name": r.role_name,
+                    "arn": r.arn,
+                })
+                .to_string(),
+            )),
+            Err(e) => {
+                let err_str = e.to_string();
+                if err_str.contains("NoSuchEntity") || err_str.contains("not found") {
+                    Ok(None)
+                } else {
+                    Err(pyo3::exceptions::PyRuntimeError::new_err(err_str))
+                }
+            }
+        }
     }
 
     fn iam_list_roles(&self) -> PyResult<Vec<String>> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "IAM: use Docker method",
-        ))
+        Ok(self
+            .iam
+            .list_roles()
+            .into_iter()
+            .map(|r| r.role_name)
+            .collect())
     }
 
-    fn iam_delete_role(&self, _name: &str) -> PyResult<()> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "IAM: use Docker method",
-        ))
+    fn iam_delete_role(&self, name: &str) -> PyResult<()> {
+        self.iam
+            .delete_role(name)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn iam_create_policy(&self, name: &str, policy: &str) -> PyResult<String> {
+        self.iam
+            .create_policy(name, policy, None, None)
+            .map(|p| p.arn)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn iam_delete_policy(&self, arn: &str) -> PyResult<()> {
+        self.iam
+            .delete_policy(arn)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn iam_attach_role_policy(&self, role_name: &str, policy_arn: &str) -> PyResult<()> {
+        self.iam
+            .attach_role_policy(role_name, policy_arn)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn iam_detach_role_policy(&self, role_name: &str, policy_arn: &str) -> PyResult<()> {
+        self.iam
+            .detach_role_policy(role_name, policy_arn)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     // ============ SNS ============
 
-    fn sns_create_topic(&self, _name: &str) -> PyResult<String> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "SNS: use Docker method",
-        ))
+    fn sns_create_topic(&self, name: &str) -> PyResult<String> {
+        self.sns
+            .create_topic(name)
+            .map(|t| t.name)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    fn sns_publish(&self, _topic: &str, _message: &str) -> PyResult<String> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "SNS: use Docker method",
-        ))
+    fn sns_publish(&self, topic: &str, message: &str) -> PyResult<String> {
+        self.sns
+            .publish(topic, message, None)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    fn sns_subscribe(&self, _topic: &str, _protocol: &str, _endpoint: &str) -> PyResult<String> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "SNS: use Docker method",
-        ))
+    fn sns_subscribe(&self, topic: &str, protocol: &str, endpoint: &str) -> PyResult<String> {
+        self.sns
+            .subscribe(topic, protocol, endpoint)
+            .map(|s| s.arn().to_string())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     fn sns_list_topics(&self) -> PyResult<Vec<String>> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "SNS: use Docker method",
-        ))
+        Ok(self.sns.list_topics().into_iter().map(|t| t.name).collect())
     }
 
-    fn sns_delete_topic(&self, _name: &str) -> PyResult<()> {
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "SNS: use Docker method",
-        ))
+    fn sns_delete_topic(&self, name: &str) -> PyResult<()> {
+        self.sns
+            .delete_topic(name)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn sns_unsubscribe(&self, subscription_arn: &str) -> PyResult<()> {
+        self.sns
+            .unsubscribe(subscription_arn)
+            .map(|_| ())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    fn sns_list_subscriptions(&self, topic: &str) -> PyResult<Vec<String>> {
+        self.sns
+            .list_subscriptions(topic)
+            .map(|subs| subs.into_iter().map(|s| s.endpoint().to_string()).collect())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
     // ============ SQS ============
@@ -312,7 +457,6 @@ impl RustStack {
     }
 
     fn sqs_purge_queue(&self, _name: &str) -> PyResult<()> {
-        // Purge is not implemented in storage - just return ok
         Ok(())
     }
 }

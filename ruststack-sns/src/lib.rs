@@ -6,7 +6,7 @@
 //! - Publish (push to subscribers)
 
 pub mod handlers;
-mod storage;
+pub mod storage;
 
 pub use handlers::handle_request;
 pub use storage::{SnsState, SnsStorage};

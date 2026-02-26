@@ -4,7 +4,7 @@
 //! buffering data. Supports S3 destination (stub).
 
 pub mod handlers;
-mod storage;
+pub mod storage;
 
 pub use handlers::handle_request;
 pub use storage::{FirehoseState, FirehoseStorage};

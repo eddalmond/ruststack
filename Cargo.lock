@@ -2946,6 +2946,8 @@ dependencies = [
  "ruststack-secretsmanager",
  "ruststack-sns",
  "ruststack-sqs",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
