@@ -6,7 +6,7 @@
 //! - Queue attributes (visibility timeout, etc.)
 
 pub mod handlers;
-mod storage;
+pub mod storage;
 
 pub use handlers::handle_request;
 pub use storage::{SqsState, SqsStorage};

@@ -9,6 +9,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module"] }
+ruststack-s3 = { path = "../ruststack-s3" }
+ruststack-sqs = { path = "../ruststack-sqs" }
+ruststack-sns = { path = "../ruststack-sns" }
+ruststack-secretsmanager = { path = "../ruststack-secretsmanager" }
+ruststack-firehose = { path = "../ruststack-firehose" }
+ruststack-iam = { path = "../ruststack-iam" }
+futures = "0.3"
+bytes = "1"
 
 [build-dependencies]
 pyo3-build-config = "0.22"

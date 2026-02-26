@@ -2936,8 +2936,16 @@ dependencies = [
 name = "ruststack-py"
 version = "0.1.0"
 dependencies = [
+ "bytes",
+ "futures",
  "pyo3",
  "pyo3-build-config",
+ "ruststack-firehose",
+ "ruststack-iam",
+ "ruststack-s3",
+ "ruststack-secretsmanager",
+ "ruststack-sns",
+ "ruststack-sqs",
 ]
 
 [[package]]
