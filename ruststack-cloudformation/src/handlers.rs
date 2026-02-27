@@ -48,6 +48,7 @@ pub async fn handle_request(
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CreateStackInput {
     #[serde(rename = "StackName")]
     stack_name: String,
@@ -314,6 +315,7 @@ async fn handle_list_stacks(state: Arc<CloudFormationState>, _body: Bytes) -> Re
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ValidateTemplateInput {
     #[serde(rename = "TemplateBody")]
     template_body: Option<String>,

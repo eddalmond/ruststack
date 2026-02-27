@@ -92,6 +92,7 @@ pub async fn handle_request(
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CreateStateMachineInput {
     name: String,
     definition: String,

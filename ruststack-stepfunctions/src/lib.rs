@@ -390,19 +390,19 @@ pub fn apply_result_path(
             ctx.input = result;
         }
         Some(path) => {
-            if path.starts_with("$.") {
-                let path_to_use = format!("$.{}", &path[2..]);
+            if let Some(stripped) = path.strip_prefix("$.") {
+                let path_to_use = format!("$.{}", stripped);
                 if let Ok(_value) = extract_path(&ctx.input, &path_to_use) {
                     let mut new_input = ctx.input.clone();
                     if let serde_json::Value::Object(ref mut m) = new_input {
-                        m.insert(path[2..].to_string(), result);
+                        m.insert(stripped.to_string(), result);
                     } else {
                         ctx.input = result;
                     }
                     ctx.input = new_input;
                 } else {
                     let mut new_input = serde_json::Map::new();
-                    new_input.insert(path[2..].to_string(), result);
+                    new_input.insert(stripped.to_string(), result);
                     ctx.input = serde_json::Value::Object(new_input);
                 }
             }
@@ -419,8 +419,8 @@ pub fn extract_path(
         return Ok(input.clone());
     }
 
-    if path.starts_with("$.") {
-        let parts: Vec<&str> = path[2..].split('.').collect();
+    if let Some(stripped) = path.strip_prefix("$.") {
+        let parts: Vec<&str> = stripped.split('.').collect();
         let mut current = input.clone();
 
         for part in parts {
