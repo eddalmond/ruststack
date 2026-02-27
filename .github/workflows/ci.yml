@@ -24,27 +24,12 @@ jobs:
           components: rustfmt
 
       - name: Check formatting
-        run: cargo fmt --all --check --exclude ruststack-py
-
-  # Clippy linting
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        run: cargo fmt --all --check --manifest-path Cargo.toml
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --exclude ruststack-py -- -D warnings
+        run: cargo clippy --workspace --all-targets --manifest-path Cargo.toml -- -D warnings
 
-  # Build and test matrix
+      # Build and test matrix
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -65,13 +50,13 @@ jobs:
           key: ${{ matrix.os }}
 
       - name: Build
-        run: cargo build --workspace --release --exclude ruststack-py
+        run: cargo build --workspace --release --manifest-path Cargo.toml
 
       - name: Run tests
-        run: cargo test --workspace --all-targets --exclude ruststack-py
+        run: cargo test --workspace --all-targets --manifest-path Cargo.toml
 
       - name: Run doc tests
-        run: cargo test --workspace --doc --exclude ruststack-py
+        run: cargo test --workspace --doc --manifest-path Cargo.toml
 
   # Integration tests with boto3
   integration:
@@ -89,7 +74,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build release binary
-        run: cargo build --release --exclude ruststack-py
+        run: cargo build --release --manifest-path Cargo.toml
 
       - name: Set up Python
         uses: actions/setup-python@v5
