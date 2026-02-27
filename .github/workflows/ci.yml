@@ -167,9 +167,9 @@ jobs:
 
       - name: Build Python bindings
         run: |
-          maturin build --release --interpreter python3 --manifest-path ruststack-py/Cargo.toml
+          maturin build --release --interpreter python3 --manifest-path ruststack-py/Cargo.toml --out dist
 
       - name: Install and test bindings
         run: |
-          pip install --find-links ruststack-py/target/release/wheels ruststack-py
+          pip install --find-links dist ruststack-py
           python -c "import ruststack_py; print('Python bindings imported successfully!')"
