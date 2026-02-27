@@ -2972,7 +2972,6 @@ dependencies = [
  "bytes",
  "futures",
  "pyo3",
- "pyo3-build-config",
  "ruststack-firehose",
  "ruststack-iam",
  "ruststack-s3",
