@@ -14,7 +14,6 @@ members = [
     "ruststack-sns",
     "ruststack-cognito",
     "ruststack-test",
-    "ruststack-py",
     "ruststack-cloudformation",
     "ruststack-stepfunctions",
 ]

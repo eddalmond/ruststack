@@ -167,8 +167,7 @@ jobs:
 
       - name: Build Python bindings
         run: |
-          cd ruststack-py
-          maturin build --release --interpreter python3
+          maturin build --release --interpreter python3 --manifest-path ruststack-py/Cargo.toml
 
       - name: Install and test bindings
         run: |
