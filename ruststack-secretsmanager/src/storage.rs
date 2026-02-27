@@ -528,7 +528,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = storage.delete_secret("to-force-delete", true).unwrap();
+        storage.delete_secret("to-force-delete", true).unwrap();
 
         let list = storage.list_secrets();
         assert!(list.is_empty());
@@ -668,7 +668,7 @@ mod tests {
         let storage = SecretsManagerStorage::new();
 
         let binary_value = "SGVsbG8gV29ybGQ=".to_string(); // base64 encoded "Hello World"
-        let secret = storage
+        let _secret = storage
             .create_secret(
                 "binary-secret",
                 None,

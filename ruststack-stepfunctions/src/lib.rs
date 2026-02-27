@@ -676,9 +676,7 @@ mod tests {
             "items": ["a", "b", "c"]
         });
 
-        let result = extract_path(&input, "$.items");
-        if result.is_ok() {
-            let arr = result.unwrap();
+        if let Ok(arr) = extract_path(&input, "$.items") {
             if let serde_json::Value::Array(a) = arr {
                 assert_eq!(a.len(), 3);
             }
