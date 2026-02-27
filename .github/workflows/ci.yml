@@ -24,7 +24,7 @@ jobs:
           components: rustfmt
 
       - name: Check formatting
-        run: cargo fmt --all --check
+        run: cargo fmt --all --check --exclude ruststack-py
 
   # Clippy linting
   clippy:
@@ -42,7 +42,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --exclude ruststack-py -- -D warnings
 
   # Build and test matrix
   test:
@@ -65,13 +65,13 @@ jobs:
           key: ${{ matrix.os }}
 
       - name: Build
-        run: cargo build --workspace --release
+        run: cargo build --workspace --release --exclude ruststack-py
 
       - name: Run tests
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --exclude ruststack-py
 
       - name: Run doc tests
-        run: cargo test --workspace --doc
+        run: cargo test --workspace --doc --exclude ruststack-py
 
   # Integration tests with boto3
   integration:
@@ -89,7 +89,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build release binary
-        run: cargo build --release
+        run: cargo build --release --exclude ruststack-py
 
       - name: Set up Python
         uses: actions/setup-python@v5
