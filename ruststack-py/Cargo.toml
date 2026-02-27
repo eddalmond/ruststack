@@ -9,6 +9,9 @@ edition = "2021"
 name = "ruststack_py"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+extension-module = ["pyo3/extension-module"]
+
 [dependencies]
 pyo3 = { version = "0.24", features = ["extension-module"] }
 ruststack-s3 = { path = "../ruststack-s3" }
