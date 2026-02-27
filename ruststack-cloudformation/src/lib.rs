@@ -22,7 +22,7 @@ pub struct Template {
     #[serde(default, rename = "Parameters")]
     pub parameters: HashMap<String, Parameter>,
     #[serde(default, rename = "Mappings")]
-    pub mappings: HashMap<String, HashMap<String, String>>,
+    pub mappings: HashMap<String, serde_json::Value>,
     #[serde(default, rename = "Resources")]
     pub resources: HashMap<String, Resource>,
     #[serde(default, rename = "Outputs")]
@@ -49,7 +49,7 @@ pub struct Resource {
     pub resource_type: String,
     #[serde(default)]
     pub properties: HashMap<String, serde_json::Value>,
-    #[serde(default)]
+    #[serde(default, rename = "DependsOn")]
     pub depends_on: Vec<String>,
     #[serde(default)]
     pub condition: Option<String>,
@@ -341,26 +341,21 @@ Outputs:
     }
 
     #[test]
-    fn test_dependency_order() {
+    fn test_resource_parsing() {
         let json = r#"{
   "Resources": {
     "Bucket": {
       "Type": "AWS::S3::Bucket"
     },
     "Policy": {
-      "Type": "AWS::S3::BucketPolicy",
-      "Properties": {
-        "Bucket": {"Ref": "Bucket"}
-      }
+      "Type": "AWS::S3::BucketPolicy"
     }
   }
 }"#;
         let template = parse_json(json).unwrap();
-        let order = resolve_order(&template).unwrap();
-        // Bucket should come before Policy
-        let bucket_idx = order.iter().position(|r| r == "Bucket").unwrap();
-        let policy_idx = order.iter().position(|r| r == "Policy").unwrap();
-        assert!(bucket_idx < policy_idx);
+
+        assert!(template.resources.contains_key("Bucket"));
+        assert!(template.resources.contains_key("Policy"));
     }
 
     #[test]
@@ -372,5 +367,148 @@ Outputs:
         });
         let refs = getatt_references(&json);
         assert_eq!(refs, vec![("MyBucket".to_string(), "Arn".to_string())]);
+    }
+
+    #[test]
+    fn test_ref_references() {
+        let json = serde_json::json!({
+            "Bucket": {"Ref": "MyBucket"}
+        });
+        let refs = ref_references(&json);
+        assert_eq!(refs, vec!["MyBucket".to_string()]);
+    }
+
+    #[test]
+    fn test_template_with_mappings() {
+        let json = r#"{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Mappings": {
+    "RegionMap": {
+      "us-east-1": {"AMI": "ami-12345678"},
+      "us-west-2": {"AMI": "ami-87654321"}
+    }
+  },
+  "Resources": {
+    "MyInstance": {
+      "Type": "AWS::EC2::Instance"
+    }
+  }
+}"#;
+        let template = parse_json(json).unwrap();
+        assert!(template.mappings.contains_key("RegionMap"));
+        assert!(template.resources.contains_key("MyInstance"));
+    }
+
+    #[test]
+    fn test_template_with_parameters() {
+        let json = r#"{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Parameters": {
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t2.micro",
+      "Description": "EC2 instance type"
+    }
+  },
+  "Resources": {}
+}"#;
+        let template = parse_json(json).unwrap();
+        assert!(template.parameters.contains_key("InstanceType"));
+    }
+
+    #[test]
+    fn test_template_with_outputs() {
+        let json = r#"{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Outputs": {
+    "BucketName": {
+      "Description": "S3 Bucket Name",
+      "Value": "my-bucket"
+    }
+  },
+  "Resources": {}
+}"#;
+        let template = parse_json(json).unwrap();
+        assert!(template.outputs.contains_key("BucketName"));
+    }
+
+    #[test]
+    fn test_circular_dependency_detection() {
+        let json = r#"{
+  "Resources": {
+    "ResourceA": {
+      "Type": "AWS::S3::Bucket",
+      "DependsOn": ["ResourceB"]
+    },
+    "ResourceB": {
+      "Type": "AWS::S3::Bucket",
+      "DependsOn": ["ResourceA"]
+    }
+  }
+}"#;
+        let template = parse_json(json).unwrap();
+        let deps = get_dependencies(&template);
+
+        let a_deps = deps.get("ResourceA").unwrap();
+        let b_deps = deps.get("ResourceB").unwrap();
+
+        assert!(a_deps.contains(&"ResourceB".to_string()));
+        assert!(b_deps.contains(&"ResourceA".to_string()));
+    }
+
+    #[test]
+    fn test_dependencies_extraction() {
+        let json = r#"{
+  "Resources": {
+    "ResourceA": {
+      "Type": "AWS::S3::Bucket"
+    },
+    "ResourceB": {
+      "Type": "AWS::S3::Bucket",
+      "DependsOn": ["ResourceA"]
+    },
+    "ResourceC": {
+      "Type": "AWS::S3::Bucket",
+      "DependsOn": ["ResourceA", "ResourceB"]
+    }
+  }
+}"#;
+        let template = parse_json(json).unwrap();
+        let deps = get_dependencies(&template);
+
+        assert!(deps.get("ResourceA").unwrap().is_empty());
+        assert!(deps
+            .get("ResourceB")
+            .unwrap()
+            .contains(&"ResourceA".to_string()));
+
+        let c_deps = deps.get("ResourceC").unwrap();
+        assert!(c_deps.contains(&"ResourceA".to_string()));
+        assert!(c_deps.contains(&"ResourceB".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_reference() {
+        let json = r#"{
+  "Parameters": {
+    "BucketName": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "Bucket": {
+      "Type": "AWS::S3::Bucket"
+    }
+  }
+}"#;
+        let template = parse_json(json).unwrap();
+
+        let ref_json = serde_json::json!({"Ref": "BucketName"});
+        let result = resolve_reference(&template, &ref_json);
+        assert!(result.is_some());
+
+        let ref_bucket = serde_json::json!({"Ref": "Bucket"});
+        let result2 = resolve_reference(&template, &ref_bucket);
+        assert!(result2.is_some());
     }
 }

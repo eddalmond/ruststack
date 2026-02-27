@@ -335,5 +335,201 @@ class TestIAM:
         assert "Roles" in result
 
 
+class TestCloudFormation:
+    """CloudFormation integration tests."""
+
+    @pytest.fixture
+    def client(self) -> BaseClient:
+        return boto3.client("cloudformation", endpoint_url=ENDPOINT_URL, region_name=REGION)
+
+    def test_create_stack(self, client):
+        """Create a CloudFormation stack."""
+        template = {
+            "AWSTemplateFormatVersion": "2010-09-09",
+            "Description": "Test stack",
+            "Resources": {
+                "TestBucket": {
+                    "Type": "AWS::S3::Bucket",
+                    "Properties": {
+                        "BucketName": "test-bucket"
+                    }
+                }
+            }
+        }
+        
+        result = client.create_stack(
+            StackName="test-stack",
+            TemplateBody=json.dumps(template),
+        )
+        
+        assert "StackId" in result
+
+    def test_describe_stacks(self, client):
+        """Describe CloudFormation stacks."""
+        template = {
+            "AWSTemplateFormatVersion": "2010-09-09",
+            "Resources": {}
+        }
+        
+        client.create_stack(
+            StackName="describe-test-stack",
+            TemplateBody=json.dumps(template),
+        )
+        
+        result = client.describe_stacks(StackName="describe-test-stack")
+        assert "Stacks" in result
+        assert len(result["Stacks"]) > 0
+
+    def test_list_stacks(self, client):
+        """List CloudFormation stacks."""
+        result = client.list_stacks()
+        assert "StackSummaries" in result
+
+    def test_validate_template(self, client):
+        """Validate a CloudFormation template."""
+        template = {
+            "AWSTemplateFormatVersion": "2010-09-09",
+            "Description": "Valid template",
+            "Resources": {}
+        }
+        
+        result = client.validate_template(
+            TemplateBody=json.dumps(template),
+        )
+        
+        assert "Description" in result
+
+    def test_delete_stack(self, client):
+        """Delete a CloudFormation stack."""
+        template = {
+            "AWSTemplateFormatVersion": "2010-09-09",
+            "Resources": {}
+        }
+        
+        client.create_stack(
+            StackName="delete-test-stack",
+            TemplateBody=json.dumps(template),
+        )
+        
+        client.delete_stack(StackName="delete-test-stack")
+        
+        result = client.describe_stacks(StackName="delete-test-stack")
+        stacks = result.get("Stacks", [])
+        if stacks:
+            assert stacks[0]["StackStatus"] == "DELETE_COMPLETE"
+
+
+class TestStepFunctions:
+    """Step Functions integration tests."""
+
+    @pytest.fixture
+    def client(self) -> BaseClient:
+        return boto3.client("stepfunctions", endpoint_url=ENDPOINT_URL, region_name=REGION)
+
+    def test_create_state_machine(self, client):
+        """Create a state machine."""
+        definition = {
+            "StartAt": "PassState",
+            "States": {
+                "PassState": {
+                    "Type": "Pass",
+                    "End": True
+                }
+            }
+        }
+        
+        result = client.create_state_machine(
+            name="test-state-machine",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        assert "stateMachineArn" in result
+
+    def test_describe_state_machine(self, client):
+        """Describe a state machine."""
+        definition = {
+            "StartAt": "PassState",
+            "States": {
+                "PassState": {
+                    "Type": "Pass",
+                    "End": True
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="describe-test-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        result = client.describe_state_machine(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:describe-test-sm"
+        )
+        
+        assert "stateMachineArn" in result
+        assert result["name"] == "describe-test-sm"
+
+    def test_list_state_machines(self, client):
+        """List state machines."""
+        result = client.list_state_machines()
+        assert "stateMachines" in result
+
+    def test_start_execution(self, client):
+        """Start a state machine execution."""
+        definition = {
+            "StartAt": "PassState",
+            "States": {
+                "PassState": {
+                    "Type": "Pass",
+                    "End": True
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="execution-test-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        result = client.start_execution(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:execution-test-sm",
+            name="test-execution",
+        )
+        
+        assert "executionArn" in result
+
+    def test_describe_execution(self, client):
+        """Describe an execution."""
+        definition = {
+            "StartAt": "PassState",
+            "States": {
+                "PassState": {
+                    "Type": "Pass",
+                    "End": True
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="describe-exec-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        start_result = client.start_execution(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:describe-exec-sm",
+        )
+        
+        result = client.describe_execution(
+            executionArn=start_result["executionArn"]
+        )
+        
+        assert "executionArn" in result
+        assert "status" in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -533,4 +533,169 @@ mod tests {
         apply_result_path(&mut ctx, serde_json::json!("new_value"), Some("$"));
         assert_eq!(ctx.input, "new_value");
     }
+
+    #[test]
+    fn test_parse_task_state() {
+        let json = r#"
+        {
+            "StartAt": "MyTask",
+            "States": {
+                "MyTask": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:lambda:us-east-1:123456789012:function:myFunction",
+                    "End": true
+                }
+            }
+        }
+        "#;
+        let sm = parse_state_machine(json).unwrap();
+        assert_eq!(sm.start_at, "MyTask");
+        assert!(sm.states.contains_key("MyTask"));
+    }
+
+    #[test]
+    fn test_parse_choice_state() {
+        let json = r#"
+        {
+            "StartAt": "CheckStatus",
+            "States": {
+                "CheckStatus": {
+                    "Type": "Choice",
+                    "Choices": [
+                        {
+                            "Variable": "$.status",
+                            "StringEquals": "active",
+                            "Next": "ActiveState"
+                        }
+                    ],
+                    "Default": "UnknownState"
+                },
+                "ActiveState": {
+                    "Type": "Pass",
+                    "End": true
+                },
+                "UnknownState": {
+                    "Type": "Pass",
+                    "End": true
+                }
+            }
+        }
+        "#;
+        let sm = parse_state_machine(json).unwrap();
+        assert_eq!(sm.start_at, "CheckStatus");
+    }
+
+    #[test]
+    fn test_parse_wait_state() {
+        let json = r#"
+        {
+            "StartAt": "Wait",
+            "States": {
+                "Wait": {
+                    "Type": "Wait",
+                    "Seconds": 10,
+                    "Next": "NextState"
+                },
+                "NextState": {
+                    "Type": "Pass",
+                    "End": true
+                }
+            }
+        }
+        "#;
+        let sm = parse_state_machine(json).unwrap();
+        assert_eq!(sm.start_at, "Wait");
+        assert!(sm.states.contains_key("Wait"));
+    }
+
+    #[test]
+    fn test_parse_parallel_state() {
+        let json = r#"
+        {
+            "StartAt": "Parallel",
+            "States": {
+                "Parallel": {
+                    "Type": "Parallel",
+                    "Branches": [
+                        {
+                            "StartAt": "Branch1",
+                            "States": {
+                                "Branch1": {"Type": "Pass", "End": true}
+                            }
+                        }
+                    ],
+                    "End": true
+                }
+            }
+        }
+        "#;
+        let sm = parse_state_machine(json).unwrap();
+        assert!(sm.states.contains_key("Parallel"));
+    }
+
+    #[test]
+    fn test_get_next_state() {
+        let json = r#"
+        {
+            "StartAt": "Pass1",
+            "States": {
+                "Pass1": {
+                    "Type": "Pass",
+                    "Next": "Pass2"
+                },
+                "Pass2": {
+                    "Type": "Pass",
+                    "End": true
+                }
+            }
+        }
+        "#;
+        let sm = parse_state_machine(json).unwrap();
+
+        assert!(sm.states.contains_key("Pass1"));
+        assert!(sm.states.contains_key("Pass2"));
+    }
+
+    #[test]
+    fn test_boolean_choice() {
+        let choices = vec![ChoiceRule {
+            variable: Some("$.enabled".to_string()),
+            boolean_equals: Some(true),
+            next: Some("EnabledState".to_string()),
+            ..Default::default()
+        }];
+
+        let input = serde_json::json!({"enabled": true});
+        let result = evaluate_choice(&choices, &input);
+        assert_eq!(result, Some("EnabledState".to_string()));
+    }
+
+    #[test]
+    fn test_extract_array_path() {
+        let input = serde_json::json!({
+            "items": ["a", "b", "c"]
+        });
+
+        let result = extract_path(&input, "$.items");
+        if result.is_ok() {
+            let arr = result.unwrap();
+            if let serde_json::Value::Array(a) = arr {
+                assert_eq!(a.len(), 3);
+            }
+        }
+    }
+
+    #[test]
+    fn test_extract_path_nested() {
+        let input = serde_json::json!({
+            "level1": {
+                "level2": {
+                    "value": "deep"
+                }
+            }
+        });
+
+        let result = extract_path(&input, "$.level1.level2.value");
+        assert_eq!(result.unwrap(), "deep");
+    }
 }

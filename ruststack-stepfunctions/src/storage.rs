@@ -70,7 +70,10 @@ impl ExecutionInfo {
         let now = chrono::Utc::now().timestamp();
         let arn = format!(
             "arn:aws:states:us-east-1:000000000000:execution:{}:{}",
-            state_machine_arn.split(':').next_back().unwrap_or("Unknown"),
+            state_machine_arn
+                .split(':')
+                .next_back()
+                .unwrap_or("Unknown"),
             name
         );
         Self {
