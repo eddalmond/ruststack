@@ -676,10 +676,8 @@ mod tests {
             "items": ["a", "b", "c"]
         });
 
-        if let Ok(arr) = extract_path(&input, "$.items") {
-            if let serde_json::Value::Array(a) = arr {
-                assert_eq!(a.len(), 3);
-            }
+        if let Ok(serde_json::Value::Array(a)) = extract_path(&input, "$.items") {
+            assert_eq!(a.len(), 3);
         }
     }
 
