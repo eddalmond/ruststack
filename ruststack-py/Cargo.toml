@@ -8,7 +8,7 @@ name = "ruststack_py"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.23", features = ["extension-module"] }
+pyo3 = { version = "0.24", features = ["extension-module"] }
 ruststack-s3 = { path = "../ruststack-s3" }
 ruststack-sqs = { path = "../ruststack-sqs" }
 ruststack-sns = { path = "../ruststack-sns" }
@@ -21,4 +21,4 @@ serde = "1"
 serde_json = "1"
 
 [build-dependencies]
-pyo3-build-config = "0.23"
+pyo3-build-config = "0.24"

@@ -168,12 +168,9 @@ jobs:
         run: pip install maturin
 
       - name: Build Python bindings
-        env:
-          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
         run: |
           cd ruststack-py
-          export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
-          maturin build --release
+          maturin build --release --interpreter python3
 
       - name: Install and test bindings
         run: |
