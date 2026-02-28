@@ -1,5 +1,3 @@
-[workspace]
-
 [package]
 name = "ruststack-py"
 version = "0.1.0"
