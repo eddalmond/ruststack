@@ -99,8 +99,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          cd examples
-          pytest test_integration.py -v
+          pytest .github/scripts/integration_test.py -v
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
