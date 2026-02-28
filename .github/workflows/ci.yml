@@ -49,8 +49,15 @@ jobs:
         with:
           key: ${{ matrix.os }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Build
         run: cargo build --workspace --release --manifest-path Cargo.toml
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: "1"
 
       - name: Run tests
         run: cargo test --workspace --all-targets --manifest-path Cargo.toml
