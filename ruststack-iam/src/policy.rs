@@ -196,45 +196,44 @@ impl PolicyEngine {
     }
 
     fn matches_glob(pattern: &str, target: &str) -> bool {
-        // Minimal glob matching for ARN wildcards (* and ?)
-        let mut p_indices = pattern.char_indices().peekable();
-        let mut t_indices = target.char_indices().peekable();
-
-        let mut next_p = p_indices.next();
-        let mut next_t = t_indices.next();
-
-        let mut fallback_p: Option<(usize, char)> = None;
-        let mut fallback_t: Option<(usize, char)> = None;
-
-        while let Some((_, p_char)) = next_p {
-            if p_char == '*' {
-                fallback_p = p_indices.peek().copied();
-                fallback_t = next_t;
-                next_p = p_indices.next();
-                continue;
-            }
-
-            if let Some((_, t_char)) = next_t {
-                if p_char == '?' || p_char == t_char {
-                    next_p = p_indices.next();
-                    next_t = t_indices.next();
-                    continue;
-                }
-            }
-
-            if let (Some(_), Some(ft)) = (fallback_p, fallback_t) {
-                next_p = fallback_p;
-                let mut temp_t = target[ft.0..].char_indices();
-                temp_t.next(); // Consume the character we matched on '*'
-                fallback_t = temp_t.next().map(|(i, c)| (ft.0 + i, c));
-                next_t = fallback_t;
-                continue;
-            }
-
-            return false;
+        // Handle trailing wildcard: pattern* matches anything starting with pattern
+        if let Some(prefix) = pattern.strip_suffix('*') {
+            return target.starts_with(prefix);
+        }
+        // Handle leading wildcard: *pattern matches anything ending with pattern
+        if let Some(suffix) = pattern.strip_prefix('*') {
+            return target.ends_with(suffix);
+        }
+        // Handle exact match
+        if pattern == target {
+            return true;
         }
 
-        next_t.is_none()
+        // Handle single character wildcard: ? matches exactly one character
+        if pattern.contains('?') && !pattern.contains('*') {
+            if pattern.len() != target.len() {
+                return false;
+            }
+            for (pc, tc) in pattern.chars().zip(target.chars()) {
+                if pc != '?' && pc != tc {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Handle middle wildcards with simple prefix/suffix check
+        // e.g., "a*bc" matches "aaabbbc" if target starts with "a" and ends with "bc"
+        if let Some(star_pos) = pattern.find('*') {
+            let prefix = &pattern[..star_pos];
+            let suffix = &pattern[star_pos + 1..];
+            // Must not have another * in suffix for this simple approach
+            if !suffix.contains('*') && !suffix.contains('?') {
+                return target.starts_with(prefix) && target.ends_with(suffix);
+            }
+        }
+
+        false
     }
 }
 
