@@ -21,7 +21,7 @@ use ruststack_cloudformation::{handlers as cloudformation_handlers, CloudFormati
 use ruststack_cognito::{handlers as cognito_handlers, CognitoState};
 use ruststack_dynamodb::{handlers as dynamodb_handlers, DynamoDBState, DynamoDBStorage};
 use ruststack_firehose::{handlers as firehose_handlers, FirehoseState};
-use ruststack_iam::{handlers as iam_handlers, IamState};
+use ruststack_iam::{handlers as iam_handlers, middleware::enforce_iam, IamState};
 use ruststack_lambda::{
     handlers::{
         self as lambda_handlers, CreateFunctionRequest, ListFunctionsQuery,
@@ -352,6 +352,8 @@ pub fn create_router(state: AppState, _env_config: EnvConfig) -> Router {
         .route("/:bucket", any(handle_bucket))
         .route("/:bucket/*key", any(handle_object))
         // Middleware layers
+        .layer(middleware::from_fn(enforce_iam))
+        .layer(axum::Extension(shared_state.iam.clone()))
         .layer(middleware::from_fn(extract_aws_protocol))
         .layer(middleware::from_fn(extract_s3_bucket))
         .layer(middleware::from_fn(validate_sigv4))

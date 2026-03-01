@@ -58,6 +58,7 @@ pub struct EnvConfig {
     pub persistence: bool,
     pub localstack_host: String,
     pub use_ssl: bool,
+    pub enforce_iam: bool,
 }
 
 impl Default for EnvConfig {
@@ -68,6 +69,7 @@ impl Default for EnvConfig {
             persistence: false,
             localstack_host: default_localstack_host(),
             use_ssl: false,
+            enforce_iam: false,
         }
     }
 }
@@ -116,12 +118,19 @@ impl EnvConfig {
             .map(|s| s == "1" || s.to_lowercase() == "true")
             .unwrap_or(false);
 
+        // ENFORCE_IAM
+        let enforce_iam = std::env::var("RUSTSTACK_ENFORCE_IAM")
+            .or_else(|_| std::env::var("ENFORCE_IAM"))
+            .map(|s| s == "1" || s.to_lowercase() == "true")
+            .unwrap_or(false);
+
         Self {
             services,
             log_level,
             persistence,
             localstack_host,
             use_ssl,
+            enforce_iam,
         }
     }
 

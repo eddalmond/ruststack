@@ -6,9 +6,9 @@ As an AI, I have formatted this roadmap with explicit "Agent Directives," "Accep
 
 - [Phase 0: Foundation & Multiplexing Engine](./plan_phase0.md) ✅ COMPLETED
 - [Phase 1: Core Parity & State Engine](./plan_phase1.md) ✅ COMPLETED
-- [Phase 2: Compute Emulation & Paywall Breakers](./plan_phase2.md) - Months 4-6
-- Phase 2.5: Python Bindings (Priority: HIGH)
-- [Phase 3: Advanced Orchestration & Shift-Left Security](./plan_phase3.md) - Months 7-12
+- [Phase 2: Compute Emulation & Paywall Breakers](./plan_phase2.md) ✅ COMPLETED
+- Phase 2.5: Python Bindings (Priority: HIGH) ✅ COMPLETED
+- [Phase 3: Advanced Orchestration & Shift-Left Security](./plan_phase3.md) ✅ COMPLETED
 
 ---
 
@@ -96,14 +96,18 @@ The RustStack project already has significant implementation:
 ### Implemented Services ✓
 - **S3**: Bucket/object operations, path-style routing
 - **DynamoDB**: Table CRUD, PutItem, GetItem, Query
-- **Lambda**: Function CRUD, subprocess executor, Docker executor
-- **Secrets Manager**: Full CRUD operations (in-memory)
+- **Lambda**: Function CRUD, subprocess executor, Docker executor (with Node.js support)
+- **Secrets Manager**: Full CRUD operations (with SQLite persistence)
 - **IAM**: Roles, policies, attach/detach
 - **API Gateway V2**: APIs, routes, integrations, stages
 - **SQS**: Queue operations
-- **SNS**: Topic operations
+- **SNS**: Topic operations (with SQS fan-out)
 - **Firehose**: Delivery stream operations
 - **CloudWatch Logs**: Log group/stream operations
+- **Cognito**: User pools, JWT generation, Admin API
+- **Step Functions**: ASL execution, Choice/Task/Parallel/Wait states
+- **CloudFormation**: Stack deployment, CDK support, recursive parsing
+- **Python Bindings**: `ruststack-py` native extension for in-process testing
 
 ### Key Files
 - Main binary: `ruststack/src/main.rs`

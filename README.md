@@ -18,14 +18,17 @@ A high-fidelity AWS local emulator written in Rust. Drop-in replacement for Loca
 |---------|-----------|-------|
 | **S3** | Buckets, objects, multipart upload, copy | XML responses, proper ETags |
 | **DynamoDB** | Tables, items, query, scan, batch ops | Full expression support |
-| **Lambda** | CRUD, invoke, environment vars, layers | Python subprocess or Docker execution, S3 code deployment |
+| **Lambda** | CRUD, invoke, environment vars, layers | Python/Docker execution (with Node.js) |
 | **CloudWatch Logs** | Groups, streams, events | For Lambda log retrieval |
-| **Secrets Manager** | Create, get, put, delete, list | Version stages (AWSCURRENT/AWSPREVIOUS) |
-| **IAM** | Roles, policies, attachments | Stub implementation (no enforcement) |
-| **API Gateway V2** | APIs, routes, integrations, stages | HTTP APIs |
+| **Secrets Manager** | Create, get, put, delete, list | Version stages, SQLite persistence |
+| **IAM** | Roles, policies, attachments | Policy evaluation engine (`ENFORCE_IAM=1`) |
+| **API Gateway V2** | APIs, routes, integrations, stages | HTTP APIs, Lambda integrations |
 | **Kinesis Firehose** | Delivery streams, put records | In-memory buffering |
 | **SQS** | Queues, send, receive, delete messages | In-memory queue storage |
-| **SNS** | Topics, subscriptions, publish | Pub/sub messaging |
+| **SNS** | Topics, subscriptions, publish | Pub/sub messaging with SQS fan-out |
+| **Cognito** | User pools, Auth, Admin API | Local JWT generation |
+| **Step Functions** | State machines, executions | Offline ASL execution |
+| **CloudFormation** | Stack deployment, CDK support | Local resource instantiation |
 
 ## Quick Start
 
@@ -87,6 +90,21 @@ async fn test_sqs() {
     server.reset().await;
 }
 ```
+
+## Python Native Bindings (`ruststack-py`)
+
+You can use RustStack directly in your Python test suites without running any Docker containers or external processes for minimal-overhead local testing.
+
+```python
+import ruststack_py
+import boto3
+
+# Initialize in-process RustStack
+rs = ruststack_py.RustStack()
+
+# Use boto3 as usual, pointing to the local endpoint
+s3 = boto3.client("s3", endpoint_url="http://localhost:4566",
+    aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
 ```
 
 ## pytest Fixture
@@ -305,11 +323,11 @@ curl http://localhost:4566/_localstack/health
 - DeleteSecret, DescribeSecret, ListSecrets
 - Version stages: AWSCURRENT, AWSPREVIOUS
 
-### IAM (Stub)
+### IAM
 - CreateRole, GetRole, DeleteRole, ListRoles
 - CreatePolicy, GetPolicy, DeletePolicy
 - AttachRolePolicy, DetachRolePolicy, ListAttachedRolePolicies
-- Note: IAM is a stub — policies are stored but not enforced
+- Deterministic policy evaluation engine (with `ENFORCE_IAM=1` flag)
 
 ### API Gateway V2 (HTTP APIs)
 - CreateApi, GetApi, DeleteApi, GetApis
@@ -321,7 +339,21 @@ curl http://localhost:4566/_localstack/health
 - CreateDeliveryStream, DeleteDeliveryStream
 - DescribeDeliveryStream, ListDeliveryStreams
 - PutRecord, PutRecordBatch
-- Note: Records are buffered in memory (not actually delivered to S3)
+- Note: Records are buffered in memory
+
+### Cognito
+- CreateUserPool, ListUserPools
+- AdminCreateUser, AdminGetUser, AdminEnableUser, AdminDisableUser, AdminDeleteUser
+- InitiateAuth (JWT token generation)
+
+### Step Functions
+- CreateStateMachine, DescribeStateMachine, ListStateMachines, DeleteStateMachine
+- StartExecution, DescribeExecution, ListExecutions, StopExecution
+- ASL states: Pass, Task, Choice, Wait, Succeed, Fail, Parallel, Map
+
+### CloudFormation
+- DescribeStacks, DeleteStack
+- Template parsing (YAML/JSON), CDK dependency resolution, deterministic resource instantiation
 
 ## Docker
 
@@ -365,8 +397,9 @@ docker run -p 4566:4566 ruststack
 
 ## Project Stats
 
-- **~17,500 lines** of Rust
-- **240+ tests** with comprehensive coverage
+- **~28,200 lines** of Rust
+- **290+ tests** with comprehensive coverage
+- **17 crates**
 - **CI/CD** via GitHub Actions
 
 ## Releases

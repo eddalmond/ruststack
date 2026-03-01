@@ -1,209 +1,241 @@
-//! IAM Policy Evaluation Engine
-//!
-//! Provides deterministic policy evaluation for access control.
+//! IAM Policy Definitions and Evaluation Engine
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Result of policy evaluation
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// An IAM Policy Document
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PolicyDocument {
+    #[serde(rename = "Version")]
+    pub version: Option<String>,
+    #[serde(rename = "Statement")]
+    pub statements: Vec<Statement>,
+}
+
+impl PolicyDocument {
+    /// Creates a new policy document from a JSON string
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+}
+
+/// A policy statement
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Statement {
+    #[serde(rename = "Sid", skip_serializing_if = "Option::is_none")]
+    pub sid: Option<String>,
+    #[serde(rename = "Effect")]
+    pub effect: Effect,
+    #[serde(rename = "Principal", skip_serializing_if = "Option::is_none")]
+    pub principal: Option<Principal>,
+    #[serde(rename = "Action", deserialize_with = "deserialize_string_or_vec")]
+    pub action: Vec<String>,
+    #[serde(rename = "Resource", deserialize_with = "deserialize_string_or_vec")]
+    pub resource: Vec<String>,
+    #[serde(rename = "Condition", skip_serializing_if = "Option::is_none")]
+    pub condition: Option<HashMap<String, HashMap<String, Vec<String>>>>,
+}
+
+/// Deserializes either a string or a sequence of strings into a Vec<String>
+fn deserialize_string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct StringOrVec;
+
+    impl<'de> serde::de::Visitor<'de> for StringOrVec {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("string or list of strings")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(vec![value.to_owned()])
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<Self::Value, S::Error>
+        where
+            S: serde::de::SeqAccess<'de>,
+        {
+            let mut vec = Vec::new();
+            while let Some(value) = seq.next_element()? {
+                vec.push(value);
+            }
+            Ok(vec)
+        }
+    }
+
+    deserializer.deserialize_any(StringOrVec)
+}
+
+/// IAM effect (Allow or Deny)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Effect {
+    #[serde(rename = "Allow")]
+    Allow,
+    #[serde(rename = "Deny")]
+    Deny,
+}
+
+/// Principal definition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum Principal {
+    All(String), // Matches "*"
+    AWS(serde_json::Value),
+    Service(serde_json::Value),
+    Federated(serde_json::Value),
+}
+
+/// Decision from a policy evaluation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decision {
     Allow,
     Deny,
     ImplicitDeny,
 }
 
-/// Evaluation context for a single API call
-#[derive(Debug, Clone)]
-pub struct EvaluationContext {
-    /// Principal ARN (e.g., role ARN)
-    pub principal_arn: Option<String>,
-    /// Action being requested (e.g., "s3:GetObject")
-    pub action: String,
-    /// Resource ARN (e.g., "arn:aws:s3:::bucket/key")
-    pub resource_arn: String,
-    /// Service context (e.g., "s3", "dynamodb")
-    pub service: String,
+/// Context for policy evaluation
+pub struct EvaluationContext<'a> {
+    pub action: &'a str,
+    pub resource: &'a str,
+    pub principal_arn: Option<&'a str>,
+    pub conditions: &'a HashMap<String, String>,
 }
 
-/// Policy evaluation engine
-#[derive(Clone)]
-pub struct PolicyEngine {
-    enforce: bool,
-}
+/// The policy evaluation engine
+pub struct PolicyEngine {}
 
 impl PolicyEngine {
-    pub fn new(enforce: bool) -> Self {
-        Self { enforce }
-    }
-
-    /// Evaluate access based on policies attached to a role
-    pub fn evaluate(&self, context: &EvaluationContext, policies: &[PolicyDocument]) -> Decision {
-        if !self.enforce {
-            return Decision::Allow;
-        }
-
-        let mut has_explicit_deny = false;
-        let mut has_explicit_allow = false;
+    /// Evaluates multiple policies returning the final decision.
+    /// Explicit Deny > Explicit Allow > Implicit Deny.
+    pub fn evaluate(policies: &[PolicyDocument], context: &EvaluationContext) -> Decision {
+        let mut has_allow = false;
 
         for policy in policies {
-            let decision = self.evaluate_policy_document(context, policy);
-            match decision {
-                Decision::Deny => has_explicit_deny = true,
-                Decision::Allow => has_explicit_allow = true,
+            match Self::evaluate_single(policy, context) {
+                Decision::Deny => return Decision::Deny, // Early return on explicit deny
+                Decision::Allow => has_allow = true,
                 Decision::ImplicitDeny => {}
             }
         }
 
-        if has_explicit_deny {
-            Decision::Deny
-        } else if has_explicit_allow {
+        if has_allow {
             Decision::Allow
         } else {
             Decision::ImplicitDeny
         }
     }
 
-    fn evaluate_policy_document(
-        &self,
-        context: &EvaluationContext,
-        policy: &PolicyDocument,
-    ) -> Decision {
-        let mut has_explicit_deny = false;
-        let mut has_explicit_allow = false;
+    fn evaluate_single(policy: &PolicyDocument, context: &EvaluationContext) -> Decision {
+        let mut has_allow = false;
 
-        for statement in &policy.statement {
-            if !self.matches_principal(context, statement) {
+        for statement in &policy.statements {
+            // Check if statement matches the action and resource
+            if !Self::matches_action(&statement.action, context.action) {
+                continue;
+            }
+            if !Self::matches_resource(&statement.resource, context.resource) {
                 continue;
             }
 
-            if !self.matches_action(context, &statement.action) {
-                continue;
-            }
+            // Note: Conditions are not fully implemented, returning true for now
+            // if let Some(ref conditions) = statement.condition { ... }
 
-            if !self.matches_resource(context, &statement.resource) {
-                continue;
-            }
-
-            match statement.effect.as_str() {
-                "Allow" => has_explicit_allow = true,
-                "Deny" => has_explicit_deny = true,
-                _ => {}
+            match statement.effect {
+                Effect::Deny => return Decision::Deny,
+                Effect::Allow => has_allow = true,
             }
         }
 
-        if has_explicit_deny {
-            Decision::Deny
-        } else if has_explicit_allow {
+        if has_allow {
             Decision::Allow
         } else {
             Decision::ImplicitDeny
         }
     }
 
-    fn matches_principal(&self, context: &EvaluationContext, statement: &Statement) -> bool {
-        // If no principal specified in policy, it applies to everyone (resource-based policies)
-        if statement.principal.is_none() {
-            return true;
-        }
-
-        let principal = statement.principal.as_ref().unwrap();
-
-        // Handle AWS wildcard - principal: "*" means anyone
-        if principal == "*" {
-            return true;
-        }
-
-        // If we have a principal ARN from the context, check if it matches
-        if let Some(arn) = &context.principal_arn {
-            // Simple contains match - if policy says "role/test" and ARN contains that
-            // This is a simplified check
-            if principal.contains('*') {
-                let pattern = principal.replace("*", ".*");
-                if let Ok(re) = regex::Regex::new(&format!("^{}$", pattern)) {
-                    return re.is_match(arn);
+    fn matches_action(actions: &[String], requested: &str) -> bool {
+        for action in actions {
+            if action == "*" {
+                return true;
+            }
+            // Support trailing wildcard e.g., s3:Get*
+            if action.ends_with('*') {
+                let prefix = &action[..action.len() - 1];
+                if requested.starts_with(prefix) {
+                    return true;
                 }
             }
-            // Direct contains check
-            return arn.contains(principal);
+            if action.eq_ignore_ascii_case(requested) {
+                return true;
+            }
         }
-
-        // No principal in context but policy has principal - deny
         false
     }
 
-    fn matches_action(&self, context: &EvaluationContext, action: &str) -> bool {
-        // Handle wildcards in actions (e.g., "s3:*" matches "s3:GetObject")
-        if action == "*" {
-            return true;
-        }
-
-        // Handle "service:*" format
-        if action.ends_with(":*") {
-            let service_prefix = action.trim_end_matches(":*");
-            return context.action.starts_with(service_prefix);
-        }
-
-        // Handle exact match or wildcards within action
-        let context_action = &context.action;
-
-        // Simple wildcard matching
-        if action.contains('*') {
-            let pattern = action.replace("*", ".*");
-            if let Ok(re) = regex::Regex::new(&format!("^{}$", pattern)) {
-                return re.is_match(context_action);
+    fn matches_resource(resources: &[String], requested: &str) -> bool {
+        for resource in resources {
+            if resource == "*" {
+                return true;
+            }
+            if resource.contains('*') || resource.contains('?') {
+                if Self::matches_glob(resource, requested) {
+                    return true;
+                }
+            }
+            if resource == requested {
+                return true;
             }
         }
-
-        action == context_action
+        false
     }
 
-    fn matches_resource(&self, context: &EvaluationContext, resource: &str) -> bool {
-        if resource == "*" {
-            return true;
-        }
+    fn matches_glob(pattern: &str, target: &str) -> bool {
+        // Minimal glob matching for ARN wildcards (* and ?)
+        let mut p_indices = pattern.char_indices().peekable();
+        let mut t_indices = target.char_indices().peekable();
 
-        let res_arn = &context.resource_arn;
+        let mut next_p = p_indices.next();
+        let mut next_t = t_indices.next();
 
-        // Handle wildcards in resources
-        if resource.contains('*') {
-            let pattern = resource.replace("*", ".*");
-            if let Ok(re) = regex::Regex::new(&format!("^{}$", pattern)) {
-                return re.is_match(res_arn);
+        let mut fallback_p: Option<(usize, char)> = None;
+        let mut fallback_t: Option<(usize, char)> = None;
+
+        while let Some((_, p_char)) = next_p {
+            if p_char == '*' {
+                fallback_p = p_indices.peek().copied();
+                fallback_t = next_t;
+                next_p = p_indices.next();
+                continue;
             }
+
+            if let Some((_, t_char)) = next_t {
+                if p_char == '?' || p_char == t_char {
+                    next_p = p_indices.next();
+                    next_t = t_indices.next();
+                    continue;
+                }
+            }
+
+            if let (Some(_), Some(ft)) = (fallback_p, fallback_t) {
+                next_p = fallback_p;
+                let mut temp_t = target[ft.0..].char_indices();
+                temp_t.next(); // Consume the character we matched on '*'
+                fallback_t = temp_t.next().map(|(i, c)| (ft.0 + i, c));
+                next_t = fallback_t;
+                continue;
+            }
+
+            return false;
         }
 
-        resource == res_arn
+        next_t.is_none()
     }
-}
-
-/// AWS Policy Document structure
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PolicyDocument {
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default, rename = "Statement")]
-    pub statement: Vec<Statement>,
-}
-
-// Alias for compatibility
-pub type Policy = PolicyDocument;
-
-/// Statement within a policy
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Statement {
-    #[serde(default)]
-    pub sid: Option<String>,
-    #[serde(rename = "Effect")]
-    pub effect: String,
-    #[serde(default)]
-    pub principal: Option<String>,
-    #[serde(rename = "Action", default)]
-    pub action: String,
-    #[serde(rename = "Resource", default)]
-    pub resource: String,
-    #[serde(default)]
-    pub condition: Option<HashMap<String, HashMap<String, String>>>,
 }
 
 #[cfg(test)]
@@ -211,130 +243,123 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_allow_wildcard() {
-        let engine = PolicyEngine::new(true);
+    fn test_policy_deserialization() {
+        let json = r#"{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "s3:ListBucket",
+                    "Resource": "arn:aws:s3:::example_bucket"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": ["s3:GetObject", "s3:PutObject"],
+                    "Resource": ["arn:aws:s3:::example_bucket/*"]
+                }
+            ]
+        }"#;
 
-        let policy: PolicyDocument = serde_json::from_str(
-            r#"{
-            "Statement": [{
-                "Effect": "Allow",
-                "Action": "*",
-                "Resource": "*"
-            }]
-        }"#,
-        )
-        .unwrap();
-
-        let context = EvaluationContext {
-            principal_arn: Some("arn:aws:iam::123456789012:role/test".to_string()),
-            action: "s3:GetObject".to_string(),
-            resource_arn: "arn:aws:s3:::bucket/key".to_string(),
-            service: "s3".to_string(),
-        };
-
-        assert_eq!(engine.evaluate(&context, &[policy]), Decision::Allow);
+        let doc = PolicyDocument::from_json(json).unwrap();
+        assert_eq!(doc.statements.len(), 2);
+        assert_eq!(doc.statements[0].action, vec!["s3:ListBucket"]);
     }
 
     #[test]
-    fn test_explicit_deny_overrides_allow() {
-        let engine = PolicyEngine::new(true);
+    fn test_evaluate_allow() {
+        let json = r#"{
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": ["s3:GetObject"],
+                    "Resource": ["arn:aws:s3:::example_bucket/*"]
+                }
+            ]
+        }"#;
 
-        let allow_policy: PolicyDocument = serde_json::from_str(
-            r#"{
-            "Statement": [{
-                "Effect": "Allow",
-                "Action": "s3:GetObject",
-                "Resource": "*"
-            }]
-        }"#,
-        )
-        .unwrap();
-
-        let deny_policy: PolicyDocument = serde_json::from_str(
-            r#"{
-            "Statement": [{
-                "Effect": "Deny",
-                "Action": "s3:GetObject",
-                "Resource": "arn:aws:s3:::secret-bucket/*"
-            }]
-        }"#,
-        )
-        .unwrap();
-
-        let context = EvaluationContext {
-            principal_arn: Some("arn:aws:iam::123456789012:role/test".to_string()),
-            action: "s3:GetObject".to_string(),
-            resource_arn: "arn:aws:s3:::secret-bucket/secret.txt".to_string(),
-            service: "s3".to_string(),
-        };
-
-        assert_eq!(
-            engine.evaluate(&context, &[allow_policy, deny_policy]),
-            Decision::Deny
-        );
-    }
-
-    #[test]
-    fn test_no_enforcement_always_allows() {
-        let engine = PolicyEngine::new(false);
-
-        let context = EvaluationContext {
+        let doc = PolicyDocument::from_json(json).unwrap();
+        let empty_conditions = HashMap::new();
+        let ctx = EvaluationContext {
+            action: "s3:GetObject",
+            resource: "arn:aws:s3:::example_bucket/test.txt",
             principal_arn: None,
-            action: "s3:GetObject".to_string(),
-            resource_arn: "arn:aws:s3:::bucket/key".to_string(),
-            service: "s3".to_string(),
+            conditions: &empty_conditions,
         };
 
-        assert_eq!(engine.evaluate(&context, &[]), Decision::Allow);
+        assert_eq!(PolicyEngine::evaluate(&[doc], &ctx), Decision::Allow);
     }
 
     #[test]
-    fn test_implicit_deny() {
-        let engine = PolicyEngine::new(true);
+    fn test_evaluate_implicit_deny() {
+        let json = r#"{
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": ["s3:GetObject"],
+                    "Resource": ["arn:aws:s3:::example_bucket/*"]
+                }
+            ]
+        }"#;
 
-        let policy: PolicyDocument = serde_json::from_str(
-            r#"{
-            "Statement": [{
-                "Effect": "Allow",
-                "Action": "s3:ListBucket",
-                "Resource": "*"
-            }]
-        }"#,
-        )
-        .unwrap();
-
-        let context = EvaluationContext {
-            principal_arn: Some("arn:aws:iam::123456789012:role/test".to_string()),
-            action: "s3:GetObject".to_string(),
-            resource_arn: "arn:aws:s3:::bucket/key".to_string(),
-            service: "s3".to_string(),
+        let doc = PolicyDocument::from_json(json).unwrap();
+        let empty_conditions = HashMap::new();
+        // Requesting PutObject instead of GetObject
+        let ctx = EvaluationContext {
+            action: "s3:PutObject",
+            resource: "arn:aws:s3:::example_bucket/test.txt",
+            principal_arn: None,
+            conditions: &empty_conditions,
         };
 
-        assert_eq!(engine.evaluate(&context, &[policy]), Decision::ImplicitDeny);
+        assert_eq!(PolicyEngine::evaluate(&[doc], &ctx), Decision::ImplicitDeny);
     }
 
     #[test]
-    fn test_service_wildcard() {
-        let engine = PolicyEngine::new(true);
+    fn test_evaluate_explicit_deny() {
+        let json = r#"{
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": ["s3:*"],
+                    "Resource": ["arn:aws:s3:::example_bucket/*"]
+                },
+                {
+                    "Effect": "Deny",
+                    "Action": ["s3:DeleteObject"],
+                    "Resource": ["arn:aws:s3:::example_bucket/protected/*"]
+                }
+            ]
+        }"#;
 
-        let policy: PolicyDocument = serde_json::from_str(
-            r#"{
-            "Statement": [{
-                "Effect": "Allow",
-                "Action": "s3:*",
-                "Resource": "*"
-            }]
-        }"#,
-        )
-        .unwrap();
+        let doc = PolicyDocument::from_json(json).unwrap();
+        let empty_conditions = HashMap::new();
 
-        let context = EvaluationContext {
-            principal_arn: Some("arn:aws:iam::123456789012:role/test".to_string()),
-            action: "s3:PutObject".to_string(),
-            resource_arn: "arn:aws:s3:::bucket/key".to_string(),
-            service: "s3".to_string(),
+        // Should be allowed by the first rule
+        let ctx1 = EvaluationContext {
+            action: "s3:GetObject",
+            resource: "arn:aws:s3:::example_bucket/protected/test.txt",
+            principal_arn: None,
+            conditions: &empty_conditions,
         };
+        assert_eq!(PolicyEngine::evaluate(&[doc.clone()], &ctx1), Decision::Allow);
 
-        assert_eq!(engine.evaluate(&context, &[policy]), Decision::Allow);
+        // Should be denied by the second rule despite the first rule
+        let ctx2 = EvaluationContext {
+            action: "s3:DeleteObject",
+            resource: "arn:aws:s3:::example_bucket/protected/test.txt",
+            principal_arn: None,
+            conditions: &empty_conditions,
+        };
+        assert_eq!(PolicyEngine::evaluate(&[doc], &ctx2), Decision::Deny);
+    }
+
+    #[test]
+    fn test_glob_matching() {
+        assert!(PolicyEngine::matches_glob("s3:*", "s3:GetObject"));
+        assert!(PolicyEngine::matches_glob("arn:aws:s3:::bucket/*", "arn:aws:s3:::bucket/path/to/key"));
+        assert!(!PolicyEngine::matches_glob("arn:aws:s3:::bucket/*", "arn:aws:sns:region:account:topic"));
+        assert!(PolicyEngine::matches_glob("a*bc", "aaabbbc"));
+        assert!(PolicyEngine::matches_glob("?at", "cat"));
+        assert!(!PolicyEngine::matches_glob("?at", "chat"));
     }
 }

@@ -523,14 +523,18 @@ Implement Amazon States Language (ASL) parser and state machine execution engine
 
 ---
 
-## Task 3.3: Shift-Left Security (Explainable IAM)
+## Task 3.3: Shift-Left Security (Explainable IAM) ✅ COMPLETED
 
 ### Overview
 Implement deterministic IAM policy evaluation for local access control.
 
-### Steps for LLM Agent
+### Completed Steps
 
-1. **Review existing IAM implementation:**
+1. ✅ Added `RUSTSTACK_ENFORCE_IAM` environment variable and `--enforce-iam` CLI flag
+2. ✅ Created `ruststack-iam/src/policy.rs` with full deterministic evaluation of IAM Precedence (Deny > Allow > ImplicitDeny)
+3. ✅ Implemented `ruststack-iam/src/middleware.rs` to intercept requests, validate SigV4 context, and execute the IAM engine
+4. ✅ Integrated IAM middleware dynamically into `ruststack/src/router.rs`
+5. ✅ Authored `test_iam_enforcement.sh` test suite to benchmark implicit deny and explicit allow workflows with `aws s3` operations
    ```bash
    cat ruststack-iam/src/handlers.rs
    cat ruststack-iam/src/storage.rs

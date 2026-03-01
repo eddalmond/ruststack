@@ -59,6 +59,10 @@ struct Args {
     /// Enable persistence (use RUSTSTACK_PERSISTENCE=1 or PERSISTENCE=1)
     #[arg(long, env = "RUSTSTACK_PERSISTENCE")]
     persistence: bool,
+
+    /// Enable IAM enforcement for local requests
+    #[arg(long, env = "RUSTSTACK_ENFORCE_IAM")]
+    enforce_iam: bool,
 }
 
 #[tokio::main]
@@ -110,6 +114,14 @@ async fn main() -> anyhow::Result<()> {
     info!(
         "  Persistence: {}",
         if args.persistence || env_config.persistence {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
+    info!(
+        "  IAM Enforcement: {}",
+        if args.enforce_iam || env_config.enforce_iam {
             "enabled"
         } else {
             "disabled"
