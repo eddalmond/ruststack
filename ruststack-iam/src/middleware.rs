@@ -1,15 +1,15 @@
 //! IAM Middleware for Request Enforcement
 
 use axum::{
-    body::{to_bytes, Body},
+    body::Body,
     extract::Request,
-    http::{header, HeaderValue, StatusCode},
+    http::{header, StatusCode},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use std::collections::HashMap;
 
-use crate::{Decision, EvaluationContext, IamState, IamStorage, PolicyDocument, PolicyEngine};
+use crate::{Decision, EvaluationContext, IamState, PolicyDocument, PolicyEngine};
 use tracing::{debug, warn};
 
 /// Check whether IAM should be enforced locally based on the config
@@ -46,12 +46,6 @@ pub async fn enforce_iam(request: Request<Body>, next: Next) -> Response {
     if uri_path == "/health" || uri_path == "/_localstack/health" {
         return next.run(request).await;
     }
-
-    // Try extracting AWS credentials from Authorization header First
-    let auth_header = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok());
 
     let (access_key, action, resource) = extract_metadata(&request);
 

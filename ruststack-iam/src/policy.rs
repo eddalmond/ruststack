@@ -183,10 +183,10 @@ impl PolicyEngine {
             if resource == "*" {
                 return true;
             }
-            if resource.contains('*') || resource.contains('?') {
-                if Self::matches_glob(resource, requested) {
-                    return true;
-                }
+            if (resource.contains('*') || resource.contains('?'))
+                && Self::matches_glob(resource, requested)
+            {
+                return true;
             }
             if resource == requested {
                 return true;
@@ -342,7 +342,7 @@ mod tests {
             conditions: &empty_conditions,
         };
         assert_eq!(
-            PolicyEngine::evaluate(&[doc.clone()], &ctx1),
+            PolicyEngine::evaluate(std::slice::from_ref(&doc), &ctx1),
             Decision::Allow
         );
 
