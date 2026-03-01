@@ -1,7 +1,7 @@
 //! IAM Middleware for Request Enforcement
 
 use axum::{
-    body::{Body, to_bytes},
+    body::{to_bytes, Body},
     extract::Request,
     http::{header, HeaderValue, StatusCode},
     middleware::Next,
@@ -9,7 +9,7 @@ use axum::{
 };
 use std::collections::HashMap;
 
-use crate::{IamState, IamStorage, PolicyDocument, EvaluationContext, PolicyEngine, Decision};
+use crate::{Decision, EvaluationContext, IamState, IamStorage, PolicyDocument, PolicyEngine};
 use tracing::{debug, warn};
 
 /// Check whether IAM should be enforced locally based on the config
@@ -34,10 +34,7 @@ pub fn access_denied_error(message: &str) -> Response {
 }
 
 /// The Axum middleware entry point to enforce AWS IAM policies
-pub async fn enforce_iam(
-    request: Request<Body>,
-    next: Next,
-) -> Response {
+pub async fn enforce_iam(request: Request<Body>, next: Next) -> Response {
     if !is_iam_enforced() {
         return next.run(request).await;
     }
@@ -61,21 +58,27 @@ pub async fn enforce_iam(
     // Provide default debug action maps for some localstack SDK integrations
     let determined_action = match &action {
         Some(a) => a.clone(),
-        None => guess_action_from_uri(method_str, &uri_path)
+        None => guess_action_from_uri(method_str, &uri_path),
     };
 
     // Evaluate credentials
     if let Some(ak) = &access_key {
         debug!(access_key = %ak, action = %determined_action, resource = %resource, "Evaluating IAM Request");
-        
-        let state = request.extensions().get::<std::sync::Arc<crate::storage::IamState>>();
+
+        let state = request
+            .extensions()
+            .get::<std::sync::Arc<crate::storage::IamState>>();
         if let Some(iam_state) = state {
-           if let Ok(decision) = evaluate_request(iam_state, ak, &determined_action, &resource).await {
-               if decision != Decision::Allow {
-                   warn!(action=%determined_action, resource=%resource, "Access Denied by IAM evaluation");
-                   return access_denied_error("Access Denied: Explicit Deny or Implicit Deny in policy eval");
-               }
-           }
+            if let Ok(decision) =
+                evaluate_request(iam_state, ak, &determined_action, &resource).await
+            {
+                if decision != Decision::Allow {
+                    warn!(action=%determined_action, resource=%resource, "Access Denied by IAM evaluation");
+                    return access_denied_error(
+                        "Access Denied: Explicit Deny or Implicit Deny in policy eval",
+                    );
+                }
+            }
         }
     } else {
         warn!(action=%determined_action, resource=%resource, "Access Denied: Unsigned request");
@@ -85,33 +88,44 @@ pub async fn enforce_iam(
     next.run(request).await
 }
 
-async fn evaluate_request(state: &IamState, access_key: &str, action: &str, resource: &str) -> Result<Decision, ()> {
+async fn evaluate_request(
+    state: &IamState,
+    access_key: &str,
+    action: &str,
+    resource: &str,
+) -> Result<Decision, ()> {
     // For local simulation, access keys tie straight to 'roles' via a mocked association
     // Real IAM would trace AccessKey -> User -> Groups/Policies or AccessKey -> Role (AssumeRole)
     // To cleanly integrate with local testing (where RoleName == AccessKey or "test" overrides)
-    
-    if access_key == "test" && !std::env::var("RUSTSTACK_STRICT_IAM").map(|v| v=="1").unwrap_or(false) {
+
+    if access_key == "test"
+        && !std::env::var("RUSTSTACK_STRICT_IAM")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+    {
         // "test" acts as root by default unless RUSTSTACK_STRICT_IAM is set
         return Ok(Decision::Allow);
     }
-    
+
     let storage = &state.storage;
     let roles = storage.list_roles();
-    
+
     // Attempt mapping the simple AccessKey to the RoleName
-    let matching_role = roles.into_iter().find(|r| r.role_name == access_key || r.role_id == access_key);
-    
+    let matching_role = roles
+        .into_iter()
+        .find(|r| r.role_name == access_key || r.role_id == access_key);
+
     if let Some(role) = matching_role {
         let mut policy_docs = Vec::new();
         // Load all attached policies
         for p_arn in &role.attached_policies {
             if let Ok(pol) = storage.get_policy(p_arn) {
-               if let Ok(doc) = PolicyDocument::from_json(&pol.policy_document) {
-                   policy_docs.push(doc);
-               } 
+                if let Ok(doc) = PolicyDocument::from_json(&pol.policy_document) {
+                    policy_docs.push(doc);
+                }
             }
         }
-        
+
         let conditions = HashMap::new();
         let ctx = EvaluationContext {
             action,
@@ -119,10 +133,10 @@ async fn evaluate_request(state: &IamState, access_key: &str, action: &str, reso
             principal_arn: Some(&role.arn),
             conditions: &conditions,
         };
-        
+
         return Ok(PolicyEngine::evaluate(&policy_docs, &ctx));
     }
-    
+
     Ok(Decision::ImplicitDeny)
 }
 
@@ -132,7 +146,11 @@ fn extract_metadata(request: &Request<Body>) -> (Option<String>, Option<String>,
     let mut resource = "*".to_string(); // ARN fallback
 
     // Attempt SigV4 header extraction
-    if let Some(auth) = request.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) {
+    if let Some(auth) = request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+    {
         if auth.starts_with("AWS4-HMAC-SHA256 ") {
             if let Some(cred_part) = auth.split("Credential=").nth(1) {
                 if let Some(key) = cred_part.split('/').next() {
@@ -143,7 +161,11 @@ fn extract_metadata(request: &Request<Body>) -> (Option<String>, Option<String>,
     }
 
     // Attempt X-Amz-Target for Action (Dynamo, Firehose, SNS, SQS post bodies)
-    if let Some(target) = request.headers().get("X-Amz-Target").and_then(|v| v.to_str().ok()) {
+    if let Some(target) = request
+        .headers()
+        .get("X-Amz-Target")
+        .and_then(|v| v.to_str().ok())
+    {
         // Format: DynamoDB_20120810.CreateTable -> dynamodb:CreateTable
         let parts: Vec<&str> = target.split('.').collect();
         if parts.len() == 2 {
@@ -169,13 +191,16 @@ fn extract_metadata(request: &Request<Body>) -> (Option<String>, Option<String>,
 fn guess_action_from_uri(method: &str, uri: &str) -> String {
     // Basic heuristics for remaining services not using X-Amz-Target
     if uri.starts_with("/2015-03-31/functions") {
-        return format!("lambda:{}", match method {
-            "POST" => "CreateFunction",
-            "GET" => "GetFunction",
-            "DELETE" => "DeleteFunction",
-            "PUT" => "UpdateFunctionCode", // or config
-            _ => "Invoke"
-        });
+        return format!(
+            "lambda:{}",
+            match method {
+                "POST" => "CreateFunction",
+                "GET" => "GetFunction",
+                "DELETE" => "DeleteFunction",
+                "PUT" => "UpdateFunctionCode", // or config
+                _ => "Invoke",
+            }
+        );
     }
 
     if uri.starts_with("/v2/apis") {
@@ -183,10 +208,13 @@ fn guess_action_from_uri(method: &str, uri: &str) -> String {
     }
 
     // Default to a generic S3 action for the root mappings
-    format!("s3:{}Object", match method {
-        "GET" => "Get",
-        "PUT" => "Put",
-        "DELETE" => "Delete",
-        _ => "List"
-    })
+    format!(
+        "s3:{}Object",
+        match method {
+            "GET" => "Get",
+            "PUT" => "Put",
+            "DELETE" => "Delete",
+            _ => "List",
+        }
+    )
 }

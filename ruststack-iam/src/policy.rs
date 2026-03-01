@@ -341,7 +341,10 @@ mod tests {
             principal_arn: None,
             conditions: &empty_conditions,
         };
-        assert_eq!(PolicyEngine::evaluate(&[doc.clone()], &ctx1), Decision::Allow);
+        assert_eq!(
+            PolicyEngine::evaluate(&[doc.clone()], &ctx1),
+            Decision::Allow
+        );
 
         // Should be denied by the second rule despite the first rule
         let ctx2 = EvaluationContext {
@@ -356,8 +359,14 @@ mod tests {
     #[test]
     fn test_glob_matching() {
         assert!(PolicyEngine::matches_glob("s3:*", "s3:GetObject"));
-        assert!(PolicyEngine::matches_glob("arn:aws:s3:::bucket/*", "arn:aws:s3:::bucket/path/to/key"));
-        assert!(!PolicyEngine::matches_glob("arn:aws:s3:::bucket/*", "arn:aws:sns:region:account:topic"));
+        assert!(PolicyEngine::matches_glob(
+            "arn:aws:s3:::bucket/*",
+            "arn:aws:s3:::bucket/path/to/key"
+        ));
+        assert!(!PolicyEngine::matches_glob(
+            "arn:aws:s3:::bucket/*",
+            "arn:aws:sns:region:account:topic"
+        ));
         assert!(PolicyEngine::matches_glob("a*bc", "aaabbbc"));
         assert!(PolicyEngine::matches_glob("?at", "cat"));
         assert!(!PolicyEngine::matches_glob("?at", "chat"));
