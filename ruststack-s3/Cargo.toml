@@ -42,3 +42,4 @@ async-trait.workspace = true
 [dev-dependencies]
 aws-sdk-s3.workspace = true
 aws-config.workspace = true
+reqwest.workspace = true
