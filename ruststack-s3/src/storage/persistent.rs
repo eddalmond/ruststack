@@ -2,6 +2,7 @@
 
 use super::traits::*;
 use async_trait::async_trait;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use bytes::Bytes;
 use chrono::Utc;
 use md5::{Digest, Md5};
@@ -289,12 +290,21 @@ impl ObjectStorage for PersistentStorage {
         bucket: &str,
         prefix: Option<&str>,
         delimiter: Option<&str>,
-        _continuation_token: Option<&str>,
+        continuation_token: Option<&str>,
         max_keys: i32,
     ) -> Result<ListObjectsResult, StorageError> {
         let conn = self.conn.lock();
         let prefix = prefix.unwrap_or("");
         let max_keys = max_keys as usize;
+
+        let mut skip_key: Option<String> = None;
+        if let Some(token) = continuation_token {
+            if let Ok(decoded) = BASE64.decode(token) {
+                if let Ok(key) = String::from_utf8(decoded) {
+                    skip_key = Some(key);
+                }
+            }
+        }
 
         let mut stmt = conn
             .prepare(
@@ -320,9 +330,18 @@ impl ObjectStorage for PersistentStorage {
 
         let mut objects = Vec::new();
         let mut common_prefixes = std::collections::HashSet::new();
+        let mut last_key: Option<String> = None;
+        let mut has_more = false;
 
         for row in rows.flatten() {
             let key = &row.key;
+
+            if let Some(ref skip) = skip_key {
+                if key <= skip {
+                    continue;
+                }
+            }
+
             let suffix = &key[prefix.len()..];
 
             if let Some(delim) = delimiter {
@@ -334,19 +353,27 @@ impl ObjectStorage for PersistentStorage {
             }
 
             if objects.len() >= max_keys {
+                has_more = true;
                 break;
             }
 
+            last_key = Some(key.clone());
             objects.push(row);
         }
 
         objects.sort_by(|a, b| a.key.cmp(&b.key));
 
+        let next_token = if has_more {
+            last_key.map(|k| BASE64.encode(k.as_bytes()))
+        } else {
+            None
+        };
+
         Ok(ListObjectsResult {
             objects,
             common_prefixes: common_prefixes.into_iter().collect(),
-            is_truncated: false,
-            next_continuation_token: None,
+            is_truncated: has_more,
+            next_continuation_token: next_token,
         })
     }
 
