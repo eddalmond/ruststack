@@ -159,20 +159,54 @@ fn create_string_to_sign(
     )
 }
 
-/// Verify a SigV4 signature (placeholder - full implementation needed)
+/// Verify a SigV4 signature
 #[allow(clippy::too_many_arguments)]
 pub fn verify_signature(
-    _method: &str,
-    _path: &str,
-    _query_string: &str,
-    _headers: &[(String, String)],
-    _payload: &[u8],
-    _auth_header: &AuthorizationHeader,
-    _secret_key: &str,
-    _timestamp: &DateTime<Utc>,
+    method: &str,
+    path: &str,
+    query_string: &str,
+    headers: &[(String, String)],
+    payload: &[u8],
+    auth_header: &AuthorizationHeader,
+    secret_key: &str,
+    timestamp: &DateTime<Utc>,
 ) -> Result<bool, SigV4Error> {
-    // TODO: Implement full verification
-    // For now, accept all signatures (dev mode)
+    let payload_hash = hex::encode(Sha256::digest(payload));
+
+    let canonical_request = create_canonical_request(
+        method,
+        path,
+        query_string,
+        headers,
+        &auth_header.signed_headers,
+        &payload_hash,
+    );
+
+    let scope = format!(
+        "{}/{}/{}/aws4_request",
+        auth_header.date, auth_header.region, auth_header.service
+    );
+
+    let string_to_sign = create_string_to_sign(
+        &auth_header.algorithm,
+        &auth_header.date,
+        &scope,
+        &canonical_request,
+    );
+
+    let signing_key = derive_signing_key(
+        secret_key,
+        &auth_header.date,
+        &auth_header.region,
+        &auth_header.service,
+    );
+
+    let expected_signature = hex::encode(hmac_sha256(&signing_key, string_to_sign.as_bytes()));
+
+    if expected_signature != auth_header.signature {
+        return Err(SigV4Error::SignatureMismatch);
+    }
+
     Ok(true)
 }
 
