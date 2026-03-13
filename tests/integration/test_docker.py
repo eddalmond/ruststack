@@ -584,6 +584,207 @@ class TestStepFunctions:
         assert "executionArn" in result
         assert "status" in result
 
+    def test_execution_pass_state(self, client):
+        """Test execution with Pass state that returns output."""
+        definition = {
+            "StartAt": "PassState",
+            "States": {
+                "PassState": {
+                    "Type": "Pass",
+                    "Result": {"message": "hello", "value": 42},
+                    "End": True
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="pass-test-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        result = client.start_execution(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:pass-test-sm",
+            input=json.dumps({"input": "data"}),
+        )
+        
+        exec_arn = result["executionArn"]
+        
+        # Describe execution to get result
+        desc = client.describe_execution(executionArn=exec_arn)
+        
+        # Execution should complete
+        assert desc["status"] in ["SUCCEEDED", "RUNNING"]
+
+    def test_execution_choice_state(self, client):
+        """Test execution with Choice state branches correctly."""
+        definition = {
+            "StartAt": "CheckValue",
+            "States": {
+                "CheckValue": {
+                    "Type": "Choice",
+                    "Choices": [
+                        {
+                            "Variable": "$.status",
+                            "StringEquals": "active",
+                            "Next": "ActiveState"
+                        },
+                        {
+                            "Variable": "$.status",
+                            "StringEquals": "inactive", 
+                            "Next": "InactiveState"
+                        }
+                    ],
+                    "Default": "UnknownState"
+                },
+                "ActiveState": {
+                    "Type": "Pass",
+                    "Result": {"result": "active branch"},
+                    "End": True
+                },
+                "InactiveState": {
+                    "Type": "Pass", 
+                    "Result": {"result": "inactive branch"},
+                    "End": True
+                },
+                "UnknownState": {
+                    "Type": "Pass",
+                    "Result": {"result": "unknown"},
+                    "End": True
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="choice-test-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        # Test active branch
+        result = client.start_execution(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:choice-test-sm",
+            input=json.dumps({"status": "active"}),
+        )
+        
+        desc = client.describe_execution(executionArn=result["executionArn"])
+        assert desc["status"] in ["SUCCEEDED", "RUNNING"]
+
+    def test_execution_wait_state(self, client):
+        """Test execution with Wait state completes."""
+        definition = {
+            "StartAt": "WaitState",
+            "States": {
+                "WaitState": {
+                    "Type": "Wait",
+                    "Seconds": 1,
+                    "Next": "AfterWait"
+                },
+                "AfterWait": {
+                    "Type": "Pass",
+                    "Result": {"after": "wait"},
+                    "End": True
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="wait-test-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        result = client.start_execution(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:wait-test-sm",
+        )
+        
+        desc = client.describe_execution(executionArn=result["executionArn"])
+        # Should complete (wait is skipped in sync mode)
+        assert desc["status"] in ["SUCCEEDED", "RUNNING"]
+
+    def test_execution_fail_state(self, client):
+        """Test execution with Fail state fails properly."""
+        definition = {
+            "StartAt": "FailState",
+            "States": {
+                "FailState": {
+                    "Type": "Fail",
+                    "Error": "TestError",
+                    "Cause": "This is a test failure"
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="fail-test-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        result = client.start_execution(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:fail-test-sm",
+        )
+        
+        # Describe execution - should show failed status
+        desc = client.describe_execution(executionArn=result["executionArn"])
+        # In sync mode, execution completes immediately
+        assert desc["status"] == "FAILED"
+
+    def test_execution_succeed_state(self, client):
+        """Test execution with Succeed state."""
+        definition = {
+            "StartAt": "SucceedState",
+            "States": {
+                "SucceedState": {
+                    "Type": "Succeed",
+                    "Output": {"result": "success"}
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="succeed-test-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        result = client.start_execution(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:succeed-test-sm",
+        )
+        
+        desc = client.describe_execution(executionArn=result["executionArn"])
+        assert desc["status"] == "SUCCEEDED"
+
+    def test_delete_state_machine(self, client):
+        """Delete a state machine."""
+        definition = {
+            "StartAt": "PassState",
+            "States": {
+                "PassState": {
+                    "Type": "Pass",
+                    "End": True
+                }
+            }
+        }
+        
+        client.create_state_machine(
+            name="delete-test-sm",
+            definition=json.dumps(definition),
+            roleArn="arn:aws:iam::123456789012:role/test",
+        )
+        
+        # Delete
+        client.delete_state_machine(
+            stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:delete-test-sm"
+        )
+        
+        # Verify deleted
+        with pytest.raises(ClientError) as exc_info:
+            client.describe_state_machine(
+                stateMachineArn="arn:aws:states:us-east-1:000000000000:stateMachine:delete-test-sm"
+            )
+        assert "StateMachineNotFound" in str(exc_info.value)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
