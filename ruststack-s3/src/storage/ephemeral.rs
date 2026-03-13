@@ -2,6 +2,7 @@
 
 use super::traits::*;
 use async_trait::async_trait;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use bytes::Bytes;
 use chrono::Utc;
 use dashmap::DashMap;
@@ -195,7 +196,7 @@ impl ObjectStorage for EphemeralStorage {
         bucket: &str,
         prefix: Option<&str>,
         delimiter: Option<&str>,
-        _continuation_token: Option<&str>,
+        continuation_token: Option<&str>,
         max_keys: i32,
     ) -> Result<ListObjectsResult, StorageError> {
         let bucket_ref = self
@@ -206,13 +207,30 @@ impl ObjectStorage for EphemeralStorage {
         let prefix = prefix.unwrap_or("");
         let max_keys = max_keys as usize;
 
+        let mut skip_key: Option<String> = None;
+        if let Some(token) = continuation_token {
+            if let Ok(decoded) = BASE64.decode(token) {
+                if let Ok(key) = String::from_utf8(decoded) {
+                    skip_key = Some(key);
+                }
+            }
+        }
+
         let mut objects = Vec::new();
         let mut common_prefixes = std::collections::HashSet::new();
+        let mut last_key: Option<String> = None;
+        let mut has_more = false;
 
         for entry in bucket_ref.objects.iter() {
             let key = entry.key();
             if !key.starts_with(prefix) {
                 continue;
+            }
+
+            if let Some(ref skip) = skip_key {
+                if key <= skip {
+                    continue;
+                }
             }
 
             let suffix = &key[prefix.len()..];
@@ -228,9 +246,11 @@ impl ObjectStorage for EphemeralStorage {
             }
 
             if objects.len() >= max_keys {
+                has_more = true;
                 break;
             }
 
+            last_key = Some(key.clone());
             objects.push(ObjectSummary {
                 key: key.clone(),
                 etag: entry.etag.clone(),
@@ -243,11 +263,17 @@ impl ObjectStorage for EphemeralStorage {
         // Sort by key
         objects.sort_by(|a, b| a.key.cmp(&b.key));
 
+        let next_token = if has_more {
+            last_key.map(|k| BASE64.encode(k.as_bytes()))
+        } else {
+            None
+        };
+
         Ok(ListObjectsResult {
             objects,
             common_prefixes: common_prefixes.into_iter().collect(),
-            is_truncated: false, // TODO: Implement pagination
-            next_continuation_token: None,
+            is_truncated: has_more,
+            next_continuation_token: next_token,
         })
     }
 
