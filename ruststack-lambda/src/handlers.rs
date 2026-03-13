@@ -144,7 +144,7 @@ pub struct UpdateFunctionConfigRequest {
 }
 
 /// Function response (for both create and get)
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct FunctionResponse {
     pub function_name: String,
@@ -168,7 +168,7 @@ pub struct FunctionResponse {
     pub environment: Option<EnvironmentResponse>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct EnvironmentResponse {
     pub variables: HashMap<String, String>,
@@ -447,17 +447,41 @@ pub async fn delete_function(
 /// List all Lambda functions
 pub async fn list_functions(
     State(state): State<Arc<LambdaState>>,
-    Query(_query): Query<ListFunctionsQuery>,
+    Query(query): Query<ListFunctionsQuery>,
 ) -> Response {
     debug!("ListFunctions");
 
-    let functions = state.service.list_functions();
-    let response = ListFunctionsResponse {
-        functions: functions
+    let max_items = query.max_items.unwrap_or(100) as usize;
+    let marker = query.marker;
+
+    let all_functions = state.service.list_functions();
+
+    let mut functions: Vec<_> = all_functions
+        .iter()
+        .map(|f| FunctionResponse::from(f.as_ref()))
+        .collect();
+
+    functions.sort_by(|a, b| a.function_name.cmp(&b.function_name));
+
+    let start_idx = if let Some(ref m) = marker {
+        functions
             .iter()
-            .map(|f| FunctionResponse::from(f.as_ref()))
-            .collect(),
-        next_marker: None, // TODO: implement pagination
+            .position(|f| f.function_name.as_str() > m.as_str())
+            .unwrap_or(functions.len())
+    } else {
+        0
+    };
+
+    let end_idx = (start_idx + max_items).min(functions.len());
+    let next_marker = if end_idx < functions.len() {
+        functions.get(end_idx - 1).map(|f| f.function_name.clone())
+    } else {
+        None
+    };
+
+    let response = ListFunctionsResponse {
+        functions: functions[start_idx..end_idx].to_vec(),
+        next_marker,
     };
 
     Response::builder()
