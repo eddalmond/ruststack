@@ -582,7 +582,7 @@ impl DynamoDBStorage {
         table_name: &str,
         key: Item,
         projection_expression: Option<&str>,
-        _expression_attribute_names: Option<&HashMap<String, String>>,
+        expression_attribute_names: Option<&HashMap<String, String>>,
     ) -> Result<Option<Item>, DynamoDBError> {
         let table = self
             .tables
@@ -593,9 +593,25 @@ impl DynamoDBStorage {
         let item = table.items.get(&key_str).map(|r| r.clone());
 
         // Apply projection if specified
-        if let (Some(_item), Some(_proj)) = (&item, projection_expression) {
-            // TODO: Implement projection expression
-            // For now, return full item
+        if let Some(proj) = projection_expression {
+            if let Some(item) = item {
+                let attributes: Vec<&str> = proj.split(',').map(|s| s.trim()).collect();
+
+                let mut projected = Item::new();
+                for attr in attributes {
+                    let attr_name = if let Some(names) = expression_attribute_names {
+                        names.get(attr).map(|s| s.as_str()).unwrap_or(attr)
+                    } else {
+                        attr
+                    };
+
+                    if let Some(value) = item.get(attr_name) {
+                        projected.insert(attr_name.to_string(), value.clone());
+                    }
+                }
+
+                return Ok(Some(projected));
+            }
         }
 
         Ok(item)
