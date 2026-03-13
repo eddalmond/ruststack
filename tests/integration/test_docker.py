@@ -190,6 +190,60 @@ class TestS3:
         result = client.list_objects_v2(Bucket=bucket_name)
         assert len(result["Contents"]) == 3
 
+    def test_list_objects_pagination(self, client):
+        """Test ListObjectsV2 pagination with continuation token."""
+        bucket_name = "test-pagination-bucket"
+        
+        # Create bucket and objects
+        try:
+            client.create_bucket(Bucket=bucket_name)
+        except ClientError:
+            pass
+
+        # Put more objects than default max-keys (typically 1000)
+        num_objects = 50
+        for i in range(num_objects):
+            client.put_object(Bucket=bucket_name, Key=f"file{i:04d}.txt", Body=f"content {i}")
+
+        # First request with small max-keys
+        result = client.list_objects_v2(Bucket=bucket_name, MaxKeys=10)
+        
+        assert len(result["Contents"]) == 10
+        assert result["IsTruncated"] is True
+        assert "NextContinuationToken" in result
+
+        # Second request with continuation token
+        token = result["NextContinuationToken"]
+        result2 = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token)
+        
+        assert len(result2["Contents"]) == 10
+        # Should have more objects after second batch
+        total = 10 + len(result2["Contents"])
+        
+        # Third request
+        if result2["IsTruncated"]:
+            token2 = result2["NextContinuationToken"]
+            result3 = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token2)
+            total += len(result3["Contents"])
+
+        # Verify we can get all objects by continuing
+        all_keys = []
+        token = None
+        while True:
+            if token:
+                result = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token)
+            else:
+                result = client.list_objects_v2(Bucket=bucket_name)
+            
+            all_keys.extend([obj["Key"] for obj in result.get("Contents", [])])
+            
+            if result.get("IsTruncated"):
+                token = result.get("NextContinuationToken")
+            else:
+                break
+
+        assert len(all_keys) == num_objects
+
 
 class TestSecretsManager:
     """Secrets Manager integration tests."""
