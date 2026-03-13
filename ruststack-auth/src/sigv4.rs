@@ -169,7 +169,7 @@ pub fn verify_signature(
     payload: &[u8],
     auth_header: &AuthorizationHeader,
     secret_key: &str,
-    timestamp: &DateTime<Utc>,
+    _timestamp: &DateTime<Utc>,
 ) -> Result<bool, SigV4Error> {
     let payload_hash = hex::encode(Sha256::digest(payload));
 
