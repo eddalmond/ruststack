@@ -1,5 +1,9 @@
 //! StepFunctions in-memory storage
 
+use crate::{
+    apply_result_path, evaluate_choice, extract_path, get_next_state, ExecutionContext, State,
+    StateMachine,
+};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -146,7 +150,26 @@ impl StepFunctionsState {
     ) -> Result<ExecutionInfo, StepFunctionsError> {
         let sm = self.describe_state_machine(state_machine_name)?;
 
-        let execution = ExecutionInfo::new(name, sm.arn.clone(), input, sm.definition.clone());
+        let mut execution = ExecutionInfo::new(name, sm.arn.clone(), input, sm.definition.clone());
+
+        // Execute the state machine
+        let result = execute_state_machine_sync(&sm.definition, execution.input.clone());
+
+        match result {
+            Ok(output) => {
+                execution.output = Some(output);
+                execution.status = "SUCCEEDED".to_string();
+            }
+            Err(e) => {
+                execution.status = "FAILED".to_string();
+                execution.output = Some(serde_json::json!({
+                    "error": e.to_string()
+                }));
+            }
+        }
+
+        let now = chrono::Utc::now().timestamp();
+        execution.stop_date = Some(now);
 
         self.executions
             .insert(execution.arn.clone(), execution.clone());
@@ -173,5 +196,119 @@ impl StepFunctionsState {
 
     pub fn update_execution(&self, execution: ExecutionInfo) {
         self.executions.insert(execution.arn.clone(), execution);
+    }
+}
+
+fn execute_state_machine_sync(
+    definition: &str,
+    input: serde_json::Value,
+) -> Result<serde_json::Value, StepFunctionsError> {
+    let state_machine: StateMachine = serde_json::from_str(definition)
+        .map_err(|e| StepFunctionsError::ExecutionFailed(e.to_string()))?;
+
+    let mut ctx = ExecutionContext {
+        input,
+        state_name: state_machine.start_at.clone(),
+        variables: std::collections::HashMap::new(),
+    };
+
+    loop {
+        let current_state = ctx.state_name.clone();
+        let state = state_machine
+            .states
+            .get(&current_state)
+            .ok_or_else(|| StepFunctionsError::InvalidState(current_state.clone()))?;
+
+        match state {
+            State::Pass {
+                result,
+                result_path,
+                output_path,
+                end,
+                next: _,
+            } => {
+                if let Some(r) = result {
+                    apply_result_path(&mut ctx, r.clone(), result_path.as_deref());
+                }
+                if let Some(output) = output_path {
+                    ctx.input = extract_path(&ctx.input, output).unwrap_or(ctx.input);
+                }
+                if *end {
+                    return Ok(ctx.input);
+                }
+                ctx.state_name = get_next_state(&state_machine, &current_state)
+                    .ok_or_else(|| StepFunctionsError::InvalidState("No next state".to_string()))?;
+            }
+
+            State::Task {
+                resource,
+                result_path: _,
+                output_path: _,
+                retry: _,
+                catch: _,
+                end: _,
+                next: _,
+            } => {
+                // For now, Task states fail - they need Lambda integration
+                return Err(StepFunctionsError::ExecutionFailed(format!(
+                    "Task state '{}' requires Lambda invocation (not yet implemented): {}",
+                    current_state, resource
+                )));
+            }
+
+            State::Choice {
+                choices, default, ..
+            } => {
+                let next_state = evaluate_choice(choices, &ctx.input)
+                    .or_else(|| default.clone())
+                    .ok_or_else(|| {
+                        StepFunctionsError::InvalidState("No matching choice".to_string())
+                    })?;
+                ctx.state_name = next_state;
+            }
+
+            State::Wait {
+                next: _, end: _, ..
+            } => {
+                // For sync execution, we skip the wait
+                // In real async execution, this would sleep
+
+                ctx.state_name = get_next_state(&state_machine, &current_state)
+                    .ok_or_else(|| StepFunctionsError::InvalidState("No next state".to_string()))?;
+            }
+
+            State::Succeed {
+                output,
+                output_path,
+            } => {
+                if let Some(output) = output {
+                    return Ok(output.clone());
+                }
+                if let Some(output) = output_path {
+                    return extract_path(&ctx.input, output)
+                        .map_err(|e| StepFunctionsError::ExecutionFailed(e.to_string()));
+                }
+                return Ok(ctx.input);
+            }
+
+            State::Fail { error, cause } => {
+                return Err(StepFunctionsError::ExecutionFailed(format!(
+                    "Error: {} - Cause: {}",
+                    error, cause
+                )));
+            }
+
+            State::Parallel { .. } => {
+                return Err(StepFunctionsError::ExecutionFailed(
+                    "Parallel state not yet implemented".to_string(),
+                ));
+            }
+
+            State::Map { .. } => {
+                return Err(StepFunctionsError::ExecutionFailed(
+                    "Map state not yet implemented".to_string(),
+                ));
+            }
+        }
     }
 }
