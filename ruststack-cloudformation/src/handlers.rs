@@ -458,7 +458,10 @@ async fn handle_validate_template(state: Arc<CloudFormationState>, body: Bytes) 
     <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
   </ResponseMetadata>
 </ValidateTemplateResponse>"#,
-                result.get("Description").and_then(|d| d.as_str()).unwrap_or("")
+                result
+                    .get("Description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("")
             );
             Response::builder()
                 .status(StatusCode::OK)
@@ -502,7 +505,13 @@ async fn handle_get_template(state: Arc<CloudFormationState>, body: Bytes) -> Re
   </ResponseMetadata>
 </GetTemplateResponse>"#,
                 // XML escape the template body
-                stack.template.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
+                stack
+                    .template
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+                    .replace("\"", "&quot;")
+                    .replace("'", "&apos;")
             );
             Response::builder()
                 .status(StatusCode::OK)
@@ -573,7 +582,7 @@ async fn handle_describe_stack_resources(state: Arc<CloudFormationState>, body: 
 </DescribeStackResourcesResponse>"#,
                 members
             );
-            
+
             Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, "text/xml")
