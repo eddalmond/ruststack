@@ -41,7 +41,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} --exclude ruststack-py
+        run: cargo build --release -p ruststack --target ${{ matrix.target }}
 
       - name: Package binary (Unix)
         run: |
