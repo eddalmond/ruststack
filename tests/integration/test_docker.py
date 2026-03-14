@@ -26,9 +26,13 @@ import requests
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 
-# Configure endpoint - default to docker service name
-ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL", "http://ruststack:4566")
+# Configure endpoint - default to local process
+ENDPOINT_URL = os.environ.get("AWS_ENDPOINT_URL", "http://localhost:4566")
 REGION = "us-east-1"
+
+# Set dummy credentials for boto3 if not already in environment
+os.environ.setdefault("AWS_ACCESS_KEY_ID", "test")
+os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test")
 
 
 class TestRustStackHealth:
@@ -206,28 +210,43 @@ class TestS3:
             client.put_object(Bucket=bucket_name, Key=f"file{i:04d}.txt", Body=f"content {i}")
 
         # First request with small max-keys
-        result = client.list_objects_v2(Bucket=bucket_name, MaxKeys=10)
+        result = client.list_objects_v2(Bucket=bucket_name, MaxKeys=15)
         
-        assert len(result["Contents"]) == 10
+        assert len(result["Contents"]) == 15
         assert result["IsTruncated"] is True
         assert "NextContinuationToken" in result
 
-        # Second request with continuation token - should get more objects
+        # Second request with continuation token
         token = result["NextContinuationToken"]
-        result2 = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token)
+        result2 = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token, MaxKeys=15)
         
-        # Should have some objects (at least some from the remaining 40)
-        assert len(result2["Contents"]) > 0
-        assert len(result2["Contents"]) < 50
+        assert len(result2["Contents"]) == 15
+        assert result2["IsTruncated"] is True
+        assert "NextContinuationToken" in result2
+
+        # Third request
+        token2 = result2["NextContinuationToken"]
+        result3 = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token2, MaxKeys=15)
+        
+        assert len(result3["Contents"]) == 15
+        assert result3["IsTruncated"] is True
+
+        # Fourth request - should get remaining 5
+        token3 = result3["NextContinuationToken"]
+        result4 = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token3, MaxKeys=15)
+        
+        assert len(result4["Contents"]) == 5
+        assert result4["IsTruncated"] is False
+        assert "NextContinuationToken" not in result4
 
         # Verify all objects can be retrieved by continuing
         all_keys = []
         token = None
         while True:
             if token:
-                result = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token)
+                result = client.list_objects_v2(Bucket=bucket_name, ContinuationToken=token, MaxKeys=20)
             else:
-                result = client.list_objects_v2(Bucket=bucket_name)
+                result = client.list_objects_v2(Bucket=bucket_name, MaxKeys=20)
             
             all_keys.extend([obj["Key"] for obj in result.get("Contents", [])])
             

@@ -248,11 +248,6 @@ impl ObjectStorage for EphemeralStorage {
                 }
             }
 
-            if objects.len() >= max_keys {
-                has_more = true;
-                break;
-            }
-
             last_key = Some(key.clone());
             if let Some(entry) = bucket_ref.objects.get(&key) {
                 objects.push(ObjectSummary {
@@ -262,6 +257,11 @@ impl ObjectStorage for EphemeralStorage {
                     last_modified: entry.last_modified,
                     storage_class: "STANDARD".to_string(),
                 });
+            }
+
+            if objects.len() >= max_keys {
+                has_more = true;
+                break;
             }
         }
 
