@@ -342,7 +342,8 @@ class TestFirehose:
             },
         )
 
-        assert result["DeliveryStreamDescription"]["DeliveryStreamName"] == stream_name
+        assert "DeliveryStreamARN" in result
+        assert stream_name in result["DeliveryStreamARN"]
 
     def test_put_record(self, client):
         """Put a record to Firehose."""

@@ -18,24 +18,36 @@ pub async fn handle_request(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let target = headers
+    let mut target = headers
         .get("x-amz-target")
         .and_then(|v: &HeaderValue| v.to_str().ok())
-        .unwrap_or("");
+        .map(|s| s.replace("AWSCloudFormation.", ""))
+        .unwrap_or_else(|| String::new());
+
+    let body_str = String::from_utf8_lossy(&body);
+
+    if target.is_empty() {
+        for pair in body_str.split('&') {
+            if let Some((key, val)) = pair.split_once('=') {
+                if key == "Action" {
+                    target = val.to_string();
+                    break;
+                }
+            }
+        }
+    }
 
     info!(target = %target, "CloudFormation request");
 
-    match target {
-        "AWSCloudFormation.CreateStack" => handle_create_stack(state, body).await,
-        "AWSCloudFormation.DescribeStacks" => handle_describe_stacks(state, body).await,
-        "AWSCloudFormation.DeleteStack" => handle_delete_stack(state, body).await,
-        "AWSCloudFormation.UpdateStack" => handle_update_stack(state, body).await,
-        "AWSCloudFormation.ListStacks" => handle_list_stacks(state, body).await,
-        "AWSCloudFormation.ValidateTemplate" => handle_validate_template(state, body).await,
-        "AWSCloudFormation.GetTemplate" => handle_get_template(state, body).await,
-        "AWSCloudFormation.DescribeStackResources" => {
-            handle_describe_stack_resources(state, body).await
-        }
+    match target.as_str() {
+        "CreateStack" => handle_create_stack(state, body).await,
+        "DescribeStacks" => handle_describe_stacks(state, body).await,
+        "DeleteStack" => handle_delete_stack(state, body).await,
+        "UpdateStack" => handle_update_stack(state, body).await,
+        "ListStacks" => handle_list_stacks(state, body).await,
+        "ValidateTemplate" => handle_validate_template(state, body).await,
+        "GetTemplate" => handle_get_template(state, body).await,
+        "DescribeStackResources" => handle_describe_stack_resources(state, body).await,
         _ => {
             warn!(target = %target, "Unknown CloudFormation operation");
             error_response(
@@ -44,6 +56,14 @@ pub async fn handle_request(
                 &format!("Unknown operation: {}", target),
             )
         }
+    }
+}
+
+fn parse_input<'a, T: serde::Deserialize<'a>>(body: &'a str) -> Result<T, String> {
+    if body.trim_start().starts_with('{') {
+        serde_json::from_str(body).map_err(|e| e.to_string())
+    } else {
+        serde_urlencoded::from_str(body).map_err(|e| e.to_string())
     }
 }
 
@@ -56,14 +76,12 @@ struct CreateStackInput {
     template_body: Option<String>,
     #[serde(rename = "TemplateURL")]
     template_url: Option<String>,
-    #[serde(rename = "Parameters")]
-    parameters: Option<Vec<serde_json::Value>>,
 }
 
 async fn handle_create_stack(state: Arc<CloudFormationState>, body: Bytes) -> Response {
     let body_str = String::from_utf8_lossy(&body);
 
-    let input: CreateStackInput = match serde_json::from_str(&body_str) {
+    let input: CreateStackInput = match parse_input(&body_str) {
         Ok(i) => i,
         Err(e) => {
             return error_response(
@@ -86,12 +104,24 @@ async fn handle_create_stack(state: Arc<CloudFormationState>, body: Bytes) -> Re
     };
 
     match state.create_stack(input.stack_name, template_body) {
-        Ok(stack) => json_response(
-            StatusCode::OK,
-            &serde_json::json!({
-                "StackId": stack.stack_id
-            }),
-        ),
+        Ok(stack) => {
+            let body = format!(
+                r#"<CreateStackResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <CreateStackResult>
+    <StackId>{}</StackId>
+  </CreateStackResult>
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</CreateStackResponse>"#,
+                stack.stack_id
+            );
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/xml")
+                .body(Body::from(body))
+                .unwrap()
+        }
         Err(CloudFormationError::StackAlreadyExists(name)) => error_response(
             StatusCode::BAD_REQUEST,
             "AlreadyExistsException",
@@ -128,7 +158,7 @@ struct StackInfo {
 async fn handle_describe_stacks(state: Arc<CloudFormationState>, body: Bytes) -> Response {
     let body_str = String::from_utf8_lossy(&body);
 
-    let input: DescribeStacksInput = match serde_json::from_str(&body_str) {
+    let input: DescribeStacksInput = match parse_input(&body_str) {
         Ok(i) => i,
         Err(_) => DescribeStacksInput { stack_name: None },
     };
@@ -136,19 +166,33 @@ async fn handle_describe_stacks(state: Arc<CloudFormationState>, body: Bytes) ->
     match input.stack_name {
         Some(name) => match state.describe_stack(&name) {
             Ok(stack) => {
-                let outputs = extract_outputs(&stack.outputs);
-                json_response(
-                    StatusCode::OK,
-                    &serde_json::json!({
-                        "Stacks": [{
-                            "StackId": stack.stack_id,
-                            "StackName": stack.stack_name,
-                            "CreationTime": format!("{:.3}", stack.creation_time as f64),
-                            "StackStatus": stack.status,
-                            "Outputs": outputs
-                        }]
-                    }),
-                )
+                // A very simplified XML response for DescribeStacks
+                let body = format!(
+                    r#"<DescribeStacksResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <DescribeStacksResult>
+    <Stacks>
+      <member>
+        <StackId>{}</StackId>
+        <StackName>{}</StackName>
+        <CreationTime>{}</CreationTime>
+        <StackStatus>{}</StackStatus>
+      </member>
+    </Stacks>
+  </DescribeStacksResult>
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</DescribeStacksResponse>"#,
+                    stack.stack_id,
+                    stack.stack_name,
+                    format!("{:.3}", stack.creation_time as f64),
+                    stack.status
+                );
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "text/xml")
+                    .body(Body::from(body))
+                    .unwrap()
             }
             Err(CloudFormationError::StackNotFound(_)) => {
                 error_response(StatusCode::NOT_FOUND, "ValidationError", "Stack not found")
@@ -161,26 +205,41 @@ async fn handle_describe_stacks(state: Arc<CloudFormationState>, body: Bytes) ->
         },
         None => {
             let stacks = state.list_stacks();
-            let stack_infos: Vec<StackInfo> = stacks
-                .into_iter()
-                .map(|s| {
-                    let outputs = extract_outputs(&s.outputs);
-                    StackInfo {
-                        stack_id: s.stack_id,
-                        stack_name: s.stack_name,
-                        creation_time: format!("{:.3}", s.creation_time as f64),
-                        stack_status: s.status,
-                        outputs,
-                    }
-                })
-                .collect();
+            let mut members = String::new();
+            for s in stacks {
+                members.push_str(&format!(
+                    r#"      <member>
+        <StackId>{}</StackId>
+        <StackName>{}</StackName>
+        <CreationTime>{}</CreationTime>
+        <StackStatus>{}</StackStatus>
+      </member>
+"#,
+                    s.stack_id,
+                    s.stack_name,
+                    format!("{:.3}", s.creation_time as f64),
+                    s.status
+                ));
+            }
 
-            json_response(
-                StatusCode::OK,
-                &serde_json::json!({
-                    "Stacks": stack_infos
-                }),
-            )
+            let body = format!(
+                r#"<DescribeStacksResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <DescribeStacksResult>
+    <Stacks>
+{}    </Stacks>
+  </DescribeStacksResult>
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</DescribeStacksResponse>"#,
+                members
+            );
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/xml")
+                .body(Body::from(body))
+                .unwrap()
         }
     }
 }
@@ -217,7 +276,7 @@ struct DeleteStackInput {
 async fn handle_delete_stack(state: Arc<CloudFormationState>, body: Bytes) -> Response {
     let body_str = String::from_utf8_lossy(&body);
 
-    let input: DeleteStackInput = match serde_json::from_str(&body_str) {
+    let input: DeleteStackInput = match parse_input(&body_str) {
         Ok(i) => i,
         Err(_) => {
             return error_response(
@@ -229,7 +288,18 @@ async fn handle_delete_stack(state: Arc<CloudFormationState>, body: Bytes) -> Re
     };
 
     match state.delete_stack(&input.stack_name) {
-        Ok(()) => json_response(StatusCode::OK, &serde_json::json!({})),
+        Ok(()) => {
+            let body = r#"<DeleteStackResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</DeleteStackResponse>"#;
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/xml")
+                .body(Body::from(body))
+                .unwrap()
+        }
         Err(CloudFormationError::StackNotFound(_)) => {
             error_response(StatusCode::NOT_FOUND, "ValidationError", "Stack not found")
         }
@@ -252,7 +322,7 @@ struct UpdateStackInput {
 async fn handle_update_stack(state: Arc<CloudFormationState>, body: Bytes) -> Response {
     let body_str = String::from_utf8_lossy(&body);
 
-    let input: UpdateStackInput = match serde_json::from_str(&body_str) {
+    let input: UpdateStackInput = match parse_input(&body_str) {
         Ok(i) => i,
         Err(e) => {
             return error_response(
@@ -275,12 +345,24 @@ async fn handle_update_stack(state: Arc<CloudFormationState>, body: Bytes) -> Re
     };
 
     match state.update_stack(&input.stack_name, template_body) {
-        Ok(stack) => json_response(
-            StatusCode::OK,
-            &serde_json::json!({
-                "StackId": stack.stack_id
-            }),
-        ),
+        Ok(stack) => {
+            let body = format!(
+                r#"<UpdateStackResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <UpdateStackResult>
+    <StackId>{}</StackId>
+  </UpdateStackResult>
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</UpdateStackResponse>"#,
+                stack.stack_id
+            );
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/xml")
+                .body(Body::from(body))
+                .unwrap()
+        }
         Err(CloudFormationError::StackNotFound(_)) => {
             error_response(StatusCode::NOT_FOUND, "ValidationError", "Stack not found")
         }
@@ -294,24 +376,41 @@ async fn handle_update_stack(state: Arc<CloudFormationState>, body: Bytes) -> Re
 
 async fn handle_list_stacks(state: Arc<CloudFormationState>, _body: Bytes) -> Response {
     let stacks = state.list_stacks();
-    let stack_summaries: Vec<serde_json::Value> = stacks
-        .into_iter()
-        .map(|s| {
-            serde_json::json!({
-                "StackId": s.stack_id,
-                "StackName": s.stack_name,
-                "CreationTime": format!("{:.3}", s.creation_time as f64),
-                "StackStatus": s.status
-            })
-        })
-        .collect();
+    let mut members = String::new();
+    for s in stacks {
+        members.push_str(&format!(
+            r#"        <member>
+          <StackId>{}</StackId>
+          <StackName>{}</StackName>
+          <CreationTime>{}</CreationTime>
+          <StackStatus>{}</StackStatus>
+        </member>
+"#,
+            s.stack_id,
+            s.stack_name,
+            format!("{:.3}", s.creation_time as f64),
+            s.status
+        ));
+    }
 
-    json_response(
-        StatusCode::OK,
-        &serde_json::json!({
-            "StackSummaries": stack_summaries
-        }),
-    )
+    let body = format!(
+        r#"<ListStacksResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <ListStacksResult>
+    <StackSummaries>
+{}    </StackSummaries>
+  </ListStacksResult>
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</ListStacksResponse>"#,
+        members
+    );
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/xml")
+        .body(Body::from(body))
+        .unwrap()
 }
 
 #[derive(Debug, Deserialize)]
@@ -326,7 +425,7 @@ struct ValidateTemplateInput {
 async fn handle_validate_template(state: Arc<CloudFormationState>, body: Bytes) -> Response {
     let body_str = String::from_utf8_lossy(&body);
 
-    let input: ValidateTemplateInput = match serde_json::from_str(&body_str) {
+    let input: ValidateTemplateInput = match parse_input(&body_str) {
         Ok(i) => i,
         Err(e) => {
             return error_response(
@@ -349,7 +448,24 @@ async fn handle_validate_template(state: Arc<CloudFormationState>, body: Bytes) 
     };
 
     match state.validate_template(&template_body) {
-        Ok(result) => json_response(StatusCode::OK, &result),
+        Ok(result) => {
+            let body = format!(
+                r#"<ValidateTemplateResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <ValidateTemplateResult>
+    <Description>{}</Description>
+  </ValidateTemplateResult>
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</ValidateTemplateResponse>"#,
+                result.get("Description").and_then(|d| d.as_str()).unwrap_or("")
+            );
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/xml")
+                .body(Body::from(body))
+                .unwrap()
+        }
         Err(e) => error_response(StatusCode::BAD_REQUEST, "ValidationError", &e.to_string()),
     }
 }
@@ -363,7 +479,7 @@ struct GetTemplateInput {
 async fn handle_get_template(state: Arc<CloudFormationState>, body: Bytes) -> Response {
     let body_str = String::from_utf8_lossy(&body);
 
-    let input: GetTemplateInput = match serde_json::from_str(&body_str) {
+    let input: GetTemplateInput = match parse_input(&body_str) {
         Ok(i) => i,
         Err(_) => {
             return error_response(
@@ -375,12 +491,25 @@ async fn handle_get_template(state: Arc<CloudFormationState>, body: Bytes) -> Re
     };
 
     match state.describe_stack(&input.stack_name) {
-        Ok(stack) => json_response(
-            StatusCode::OK,
-            &serde_json::json!({
-                "TemplateBody": stack.template
-            }),
-        ),
+        Ok(stack) => {
+            let body = format!(
+                r#"<GetTemplateResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <GetTemplateResult>
+    <TemplateBody>{}</TemplateBody>
+  </GetTemplateResult>
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</GetTemplateResponse>"#,
+                // XML escape the template body
+                stack.template.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
+            );
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/xml")
+                .body(Body::from(body))
+                .unwrap()
+        }
         Err(CloudFormationError::StackNotFound(_)) => {
             error_response(StatusCode::NOT_FOUND, "ValidationError", "Stack not found")
         }
@@ -401,7 +530,7 @@ struct DescribeStackResourcesInput {
 async fn handle_describe_stack_resources(state: Arc<CloudFormationState>, body: Bytes) -> Response {
     let body_str = String::from_utf8_lossy(&body);
 
-    let input: DescribeStackResourcesInput = match serde_json::from_str(&body_str) {
+    let input: DescribeStackResourcesInput = match parse_input(&body_str) {
         Ok(i) => i,
         Err(_) => {
             return error_response(
@@ -414,27 +543,42 @@ async fn handle_describe_stack_resources(state: Arc<CloudFormationState>, body: 
 
     match state.describe_stack(&input.stack_name) {
         Ok(stack) => {
-            let resources: Vec<serde_json::Value> = stack
-                .resources
-                .iter()
-                .enumerate()
-                .map(|(i, name)| {
-                    serde_json::json!({
-                        "LogicalResourceId": name,
-                        "ResourceType": "AWS::CloudFormation::Stack",
-                        "PhysicalResourceId": format!("{}-{}", stack.stack_name, i),
-                        "ResourceStatus": "CREATE_COMPLETE",
-                        "Timestamp": format!("{:.3}", stack.creation_time as f64)
-                    })
-                })
-                .collect();
+            let mut members = String::new();
+            for (i, name) in stack.resources.iter().enumerate() {
+                members.push_str(&format!(
+                    r#"        <member>
+          <LogicalResourceId>{}</LogicalResourceId>
+          <ResourceType>AWS::CloudFormation::Stack</ResourceType>
+          <PhysicalResourceId>{}-{}</PhysicalResourceId>
+          <ResourceStatus>CREATE_COMPLETE</ResourceStatus>
+          <Timestamp>{}</Timestamp>
+        </member>
+"#,
+                    name,
+                    stack.stack_name,
+                    i,
+                    format!("{:.3}", stack.creation_time as f64)
+                ));
+            }
 
-            json_response(
-                StatusCode::OK,
-                &serde_json::json!({
-                    "StackResources": resources
-                }),
-            )
+            let body = format!(
+                r#"<DescribeStackResourcesResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <DescribeStackResourcesResult>
+    <StackResources>
+{}    </StackResources>
+  </DescribeStackResourcesResult>
+  <ResponseMetadata>
+    <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+  </ResponseMetadata>
+</DescribeStackResourcesResponse>"#,
+                members
+            );
+            
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/xml")
+                .body(Body::from(body))
+                .unwrap()
         }
         Err(CloudFormationError::StackNotFound(_)) => {
             error_response(StatusCode::NOT_FOUND, "ValidationError", "Stack not found")
@@ -457,13 +601,20 @@ fn json_response<T: Serialize>(status: StatusCode, value: &T) -> Response {
 }
 
 fn error_response(status: StatusCode, error_type: &str, message: &str) -> Response {
-    let body = serde_json::json!({
-        "__type": error_type,
-        "message": message
-    });
+    let body = format!(
+        r#"<ErrorResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">
+  <Error>
+    <Type>Sender</Type>
+    <Code>{}</Code>
+    <Message>{}</Message>
+  </Error>
+  <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
+</ErrorResponse>"#,
+        error_type, message
+    );
     Response::builder()
         .status(status)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(body.to_string()))
+        .header(header::CONTENT_TYPE, "text/xml")
+        .body(Body::from(body))
         .unwrap()
 }

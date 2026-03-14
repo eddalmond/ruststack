@@ -99,10 +99,13 @@ impl CloudFormationState {
     }
 
     pub fn delete_stack(&self, stack_name: &str) -> Result<(), CloudFormationError> {
-        if self.stacks.remove(stack_name).is_none() {
-            return Err(CloudFormationError::StackNotFound(stack_name.to_string()));
+        if let Some(mut stack) = self.stacks.get_mut(stack_name) {
+            stack.status = "DELETE_COMPLETE".to_string();
+            stack.last_updated_time = Some(chrono::Utc::now().timestamp());
+            Ok(())
+        } else {
+            Err(CloudFormationError::StackNotFound(stack_name.to_string()))
         }
-        Ok(())
     }
 
     pub fn update_stack(

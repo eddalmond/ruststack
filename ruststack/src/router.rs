@@ -582,6 +582,21 @@ async fn handle_root(
                 {
                     return iam_handlers::handle_request(State(state.iam.clone()), headers, body)
                         .await;
+                } else if body_str.contains("Action=CreateStack")
+                    || body_str.contains("Action=DescribeStacks")
+                    || body_str.contains("Action=DeleteStack")
+                    || body_str.contains("Action=UpdateStack")
+                    || body_str.contains("Action=ListStacks")
+                    || body_str.contains("Action=ValidateTemplate")
+                    || body_str.contains("Action=GetTemplate")
+                    || body_str.contains("Action=DescribeStackResources")
+                {
+                    return cloudformation_handlers::handle_request(
+                        State(state.cloudformation.clone()),
+                        headers,
+                        body,
+                    )
+                    .await;
                 }
             }
         }

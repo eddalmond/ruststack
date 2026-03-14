@@ -2846,6 +2846,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "serde_yaml",
  "thiserror 1.0.69",
  "tokio",

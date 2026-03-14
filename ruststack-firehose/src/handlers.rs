@@ -93,6 +93,7 @@ struct BufferingHintsConfig {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct CreateDeliveryStreamResponse {
+    #[serde(rename = "DeliveryStreamARN")]
     delivery_stream_arn: String,
 }
 
