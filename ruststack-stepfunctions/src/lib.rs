@@ -34,7 +34,7 @@ pub enum State {
         result_path: Option<String>,
         #[serde(default, rename = "OutputPath")]
         output_path: Option<String>,
-        #[serde(default)]
+        #[serde(default, rename = "End")]
         end: bool,
         #[serde(default)]
         next: Option<String>,
@@ -52,7 +52,7 @@ pub enum State {
         retry: Vec<Retry>,
         #[serde(default)]
         catch: Vec<Catcher>,
-        #[serde(default)]
+        #[serde(default, rename = "End")]
         end: bool,
         #[serde(default)]
         next: Option<String>,
@@ -62,9 +62,9 @@ pub enum State {
     Choice {
         #[serde(default, rename = "Choices")]
         choices: Vec<ChoiceRule>,
-        #[serde(default)]
+        #[serde(default, rename = "Default")]
         default: Option<String>,
-        #[serde(default)]
+        #[serde(default, rename = "End")]
         end: bool,
     },
 
@@ -78,9 +78,9 @@ pub enum State {
         timestamp: Option<String>,
         #[serde(default, rename = "TimestampPath")]
         timestamp_path: Option<String>,
-        #[serde(default)]
+        #[serde(default, rename = "End")]
         end: bool,
-        #[serde(default)]
+        #[serde(default, rename = "Next")]
         next: Option<String>,
     },
 
@@ -112,7 +112,7 @@ pub enum State {
         retry: Vec<Retry>,
         #[serde(default)]
         catch: Vec<Catcher>,
-        #[serde(default)]
+        #[serde(default, rename = "End")]
         end: bool,
         #[serde(default)]
         next: Option<String>,
@@ -134,7 +134,7 @@ pub enum State {
         retry: Vec<Retry>,
         #[serde(default)]
         catch: Vec<Catcher>,
-        #[serde(default)]
+        #[serde(default, rename = "End")]
         end: bool,
         #[serde(default)]
         next: Option<String>,
@@ -173,7 +173,7 @@ pub struct ChoiceRule {
     pub is_present: Option<bool>,
     #[serde(default, rename = "IsNull")]
     pub is_null: Option<bool>,
-    #[serde(default)]
+    #[serde(default, rename = "Next")]
     pub next: Option<String>,
     #[serde(default, rename = "And")]
     pub and: Vec<ChoiceRule>,

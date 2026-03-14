@@ -53,6 +53,8 @@ struct DescribeExecutionResponse {
     name: String,
     status: String,
     input: String,
+    #[serde(rename = "output", skip_serializing_if = "Option::is_none")]
+    output: Option<String>,
     #[serde(rename = "startDate")]
     start_date: String,
     #[serde(rename = "stopDate")]
@@ -336,6 +338,10 @@ async fn handle_describe_execution(state: Arc<StepFunctionsState>, body: Bytes) 
                 name: exec.name,
                 status: exec.status,
                 input: serde_json::to_string(&exec.input).unwrap_or_default(),
+                output: exec
+                    .output
+                    .as_ref()
+                    .map(|o| serde_json::to_string(o).unwrap_or_default()),
                 start_date: format!("{:.3}", exec.start_date as f64),
                 stop_date: exec.stop_date.map(|d| format!("{:.3}", d as f64)),
             };

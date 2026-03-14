@@ -221,14 +221,17 @@ impl ObjectStorage for EphemeralStorage {
         let mut last_key: Option<String> = None;
         let mut has_more = false;
 
-        for entry in bucket_ref.objects.iter() {
-            let key = entry.key();
+        // Collect and sort keys to ensure consistent pagination
+        let mut all_keys: Vec<_> = bucket_ref.objects.iter().map(|e| e.key().clone()).collect();
+        all_keys.sort();
+
+        for key in all_keys {
             if !key.starts_with(prefix) {
                 continue;
             }
 
             if let Some(ref skip) = skip_key {
-                if key <= skip {
+                if &key <= skip {
                     continue;
                 }
             }
@@ -251,13 +254,15 @@ impl ObjectStorage for EphemeralStorage {
             }
 
             last_key = Some(key.clone());
-            objects.push(ObjectSummary {
-                key: key.clone(),
-                etag: entry.etag.clone(),
-                size: entry.data.len() as u64,
-                last_modified: entry.last_modified,
-                storage_class: "STANDARD".to_string(),
-            });
+            if let Some(entry) = bucket_ref.objects.get(&key) {
+                objects.push(ObjectSummary {
+                    key: key.clone(),
+                    etag: entry.etag.clone(),
+                    size: entry.data.len() as u64,
+                    last_modified: entry.last_modified,
+                    storage_class: "STANDARD".to_string(),
+                });
+            }
         }
 
         // Sort by key

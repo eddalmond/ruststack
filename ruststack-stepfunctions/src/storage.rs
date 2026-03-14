@@ -214,6 +214,7 @@ fn execute_state_machine_sync(
 
     loop {
         let current_state = ctx.state_name.clone();
+
         let state = state_machine
             .states
             .get(&current_state)
@@ -271,8 +272,6 @@ fn execute_state_machine_sync(
                 next: _, end: _, ..
             } => {
                 // For sync execution, we skip the wait
-                // In real async execution, this would sleep
-
                 ctx.state_name = get_next_state(&state_machine, &current_state)
                     .ok_or_else(|| StepFunctionsError::InvalidState("No next state".to_string()))?;
             }

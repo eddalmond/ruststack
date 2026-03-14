@@ -3001,6 +3001,7 @@ dependencies = [
  "md-5",
  "parking_lot",
  "quick-xml",
+ "reqwest",
  "rusqlite",
  "ruststack-auth",
  "ruststack-core",
