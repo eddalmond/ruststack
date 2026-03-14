@@ -7,7 +7,7 @@ use axum::{
     response::Response,
 };
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use tracing::{info, warn};
 
@@ -22,7 +22,7 @@ pub async fn handle_request(
         .get("x-amz-target")
         .and_then(|v: &HeaderValue| v.to_str().ok())
         .map(|s| s.replace("AWSCloudFormation.", ""))
-        .unwrap_or_else(|| String::new());
+        .unwrap_or_default();
 
     let body_str = String::from_utf8_lossy(&body);
 
@@ -141,20 +141,6 @@ struct DescribeStacksInput {
     stack_name: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct StackInfo {
-    #[serde(rename = "StackId")]
-    stack_id: String,
-    #[serde(rename = "StackName")]
-    stack_name: String,
-    #[serde(rename = "CreationTime")]
-    creation_time: String,
-    #[serde(rename = "StackStatus")]
-    stack_status: String,
-    #[serde(rename = "Outputs")]
-    outputs: Vec<serde_json::Value>,
-}
-
 async fn handle_describe_stacks(state: Arc<CloudFormationState>, body: Bytes) -> Response {
     let body_str = String::from_utf8_lossy(&body);
 
@@ -174,7 +160,7 @@ async fn handle_describe_stacks(state: Arc<CloudFormationState>, body: Bytes) ->
       <member>
         <StackId>{}</StackId>
         <StackName>{}</StackName>
-        <CreationTime>{}</CreationTime>
+        <CreationTime>{:.3}</CreationTime>
         <StackStatus>{}</StackStatus>
       </member>
     </Stacks>
@@ -183,10 +169,7 @@ async fn handle_describe_stacks(state: Arc<CloudFormationState>, body: Bytes) ->
     <RequestId>00000000-0000-0000-0000-000000000000</RequestId>
   </ResponseMetadata>
 </DescribeStacksResponse>"#,
-                    stack.stack_id,
-                    stack.stack_name,
-                    format!("{:.3}", stack.creation_time as f64),
-                    stack.status
+                    stack.stack_id, stack.stack_name, stack.creation_time as f64, stack.status
                 );
                 Response::builder()
                     .status(StatusCode::OK)
@@ -211,14 +194,11 @@ async fn handle_describe_stacks(state: Arc<CloudFormationState>, body: Bytes) ->
                     r#"      <member>
         <StackId>{}</StackId>
         <StackName>{}</StackName>
-        <CreationTime>{}</CreationTime>
+        <CreationTime>{:.3}</CreationTime>
         <StackStatus>{}</StackStatus>
       </member>
 "#,
-                    s.stack_id,
-                    s.stack_name,
-                    format!("{:.3}", s.creation_time as f64),
-                    s.status
+                    s.stack_id, s.stack_name, s.creation_time as f64, s.status
                 ));
             }
 
@@ -242,29 +222,6 @@ async fn handle_describe_stacks(state: Arc<CloudFormationState>, body: Bytes) ->
                 .unwrap()
         }
     }
-}
-
-fn extract_outputs(template_outputs: &serde_json::Value) -> Vec<serde_json::Value> {
-    if let Some(obj) = template_outputs.as_object() {
-        if let Some(outputs) = obj.get("Outputs") {
-            if let Some(arr) = outputs.as_array() {
-                return arr.clone();
-            }
-            if let Some(outputs_obj) = outputs.as_object() {
-                return outputs_obj
-                    .iter()
-                    .map(|(key, value)| {
-                        serde_json::json!({
-                            "OutputKey": key,
-                            "OutputValue": value.get("value").or(Some(value)).unwrap_or(&serde_json::Value::Null),
-                            "Description": value.get("description").unwrap_or(&serde_json::Value::Null)
-                        })
-                    })
-                    .collect();
-            }
-        }
-    }
-    vec![]
 }
 
 #[derive(Debug, Deserialize)]
@@ -382,14 +339,11 @@ async fn handle_list_stacks(state: Arc<CloudFormationState>, _body: Bytes) -> Re
             r#"        <member>
           <StackId>{}</StackId>
           <StackName>{}</StackName>
-          <CreationTime>{}</CreationTime>
+          <CreationTime>{:.3}</CreationTime>
           <StackStatus>{}</StackStatus>
         </member>
 "#,
-            s.stack_id,
-            s.stack_name,
-            format!("{:.3}", s.creation_time as f64),
-            s.status
+            s.stack_id, s.stack_name, s.creation_time as f64, s.status
         ));
     }
 
@@ -560,13 +514,10 @@ async fn handle_describe_stack_resources(state: Arc<CloudFormationState>, body: 
           <ResourceType>AWS::CloudFormation::Stack</ResourceType>
           <PhysicalResourceId>{}-{}</PhysicalResourceId>
           <ResourceStatus>CREATE_COMPLETE</ResourceStatus>
-          <Timestamp>{}</Timestamp>
+          <Timestamp>{:.3}</Timestamp>
         </member>
 "#,
-                    name,
-                    stack.stack_name,
-                    i,
-                    format!("{:.3}", stack.creation_time as f64)
+                    name, stack.stack_name, i, stack.creation_time as f64
                 ));
             }
 
@@ -598,15 +549,6 @@ async fn handle_describe_stack_resources(state: Arc<CloudFormationState>, body: 
             &e.to_string(),
         ),
     }
-}
-
-fn json_response<T: Serialize>(status: StatusCode, value: &T) -> Response {
-    let body = serde_json::to_string(value).unwrap_or_default();
-    Response::builder()
-        .status(status)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(body))
-        .unwrap()
 }
 
 fn error_response(status: StatusCode, error_type: &str, message: &str) -> Response {
