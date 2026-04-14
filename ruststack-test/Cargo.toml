@@ -12,7 +12,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-rand = "0.8"
+rand = "0.9"
 portpicker = "0.1"
 
 [dev-dependencies]
